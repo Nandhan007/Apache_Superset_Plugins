@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "outDir": "lib",
+    "rootDir": "src",
+    "declarationDir": "lib",
+    "jsx": "react-jsx",
+    "composite": true,
+    "allowJs": true,
+    "types": []
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.js",
+    "src/**/*.jsx",
+    "types/**/*",
+    "src/react-pivottable/**/*"
+  ],
+  "exclude": ["src/**/*.test.*", "src/**/*.stories.*"],
+  "references": [
+    { "path": "../../packages/superset-core" },
+    { "path": "../../packages/superset-ui-core" },
+    { "path": "../../packages/superset-ui-chart-controls" }
+  ]
+}

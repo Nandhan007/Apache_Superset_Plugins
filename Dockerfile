@@ -34,6 +34,11 @@ ARG BUILD_TRANSLATIONS
 ENV BUILD_TRANSLATIONS=${BUILD_TRANSLATIONS}
 ARG DEV_MODE="false"           # Skip frontend build in dev mode
 ENV DEV_MODE=${DEV_MODE}
+ARG BUILD_WITH_LEGACY_DEPS="true"
+ENV BUILD_WITH_LEGACY_DEPS=${BUILD_WITH_LEGACY_DEPS}
+ARG FIX_WINDOWS_ENDINGS="true"
+ENV FIX_WINDOWS_ENDINGS=${FIX_WINDOWS_ENDINGS}
+
 
 COPY docker/ /app/docker/
 # Arguments for build configuration
@@ -64,10 +69,12 @@ RUN --mount=type=bind,source=./superset-frontend/package.json,target=./package.j
     --mount=type=bind,source=./superset-frontend/package-lock.json,target=./package-lock.json \
     --mount=type=cache,target=/root/.cache \
     --mount=type=cache,target=/root/.npm \
-    if [ "${DEV_MODE}" = "false" ]; then \
-        npm ci; \
-    else \
-        echo "Skipping 'npm ci' in dev mode"; \
+    if [ "$DEV_MODE" = "false" ]; then \
+        if [ "$BUILD_WITH_LEGACY_DEPS" = "true" ]; then \
+            npm install --legacy-peer-deps; \
+        else \
+            npm ci; \
+        fi; \
     fi
 
 # Runs the webpack build process

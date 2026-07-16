@@ -142,3 +142,36 @@ try:
     )
 except ImportError:
     logger.info("Using default Docker config...")
+
+
+# ----------------------------------------------------
+# Security, Headers, and CSP
+# ----------------------------------------------------
+HTTP_HEADERS = {
+    "X-Frame-Options": "",
+    "Content-Security-Policy": "frame-ancestors *"
+}
+ 
+TALISMAN_ENABLED = False
+ 
+TALISMAN_CONFIG = {
+    "content_security_policy": {
+        "default-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
+    }
+}
+ 
+# ----------------------------------------------------
+# Session Config
+# ----------------------------------------------------
+SESSION_COOKIE_SAMESITE = None
+SESSION_COOKIE_SECURE = False
+SESSION_COOKIE_NAME = "SUPERSET_SESSION"
+SESSION_REFRESH_EACH_REQUEST = True
+SESSION_COOKIE_HTTPONLY = True
+PERMANENT_SESSION_LIFETIME = 1800
+ENABLE_PROXY_FIX = True
+ 
+# ----------------------------------------------------
+# CSRF
+# ----------------------------------------------------
+WTF_CSRF_ENABLED = False

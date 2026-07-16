@@ -176,4 +176,9 @@ export function setupStore({
 }
 
 export const store = setupStore();
+
+if (typeof window !== 'undefined') {
+  (window as any).store = store;
+}
+
 export type RootState = ReturnType<typeof store.getState>;

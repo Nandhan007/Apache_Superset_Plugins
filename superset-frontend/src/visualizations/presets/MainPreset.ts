@@ -34,6 +34,7 @@ import RoseChartPlugin from '@superset-ui/legacy-plugin-chart-rose';
 import TableChartPlugin from '@superset-ui/plugin-chart-table';
 import { WordCloudChartPlugin } from '@superset-ui/plugin-chart-word-cloud';
 import WorldMapChartPlugin from '@superset-ui/legacy-plugin-chart-world-map';
+import EditableTableChartPlugin from '@superset-ui/plugin-chart-editable-table';
 import {
   BubbleChartPlugin,
   BulletChartPlugin,
@@ -84,6 +85,7 @@ import {
   DeckglLayerVisibilityCustomizationPlugin,
 } from 'src/chartCustomizations/components';
 import { PivotTableChartPlugin as PivotTableChartPluginV2 } from '@superset-ui/plugin-chart-pivot-table';
+import { HierarchicalPivotTableChartPlugin } from '@superset-ui/plugin-chart-hierarchical-pivot-table';
 import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import { ChartCustomizationPlugins, FilterPlugins } from 'src/constants';
 import AgGridTableChartPlugin from '@superset-ui/plugin-chart-ag-grid-table';
@@ -196,6 +198,12 @@ export default class MainPreset extends Preset {
         new EchartsSunburstChartPlugin().configure({ key: VizType.Sunburst }),
         new HandlebarsChartPlugin().configure({ key: VizType.Handlebars }),
         new EchartsBubbleChartPlugin().configure({ key: VizType.Bubble }),
+        new EditableTableChartPlugin().configure({
+          key: 'EditableTable',
+        }),
+        new HierarchicalPivotTableChartPlugin().configure({
+          key: 'HierarchicalPivotTable',
+        }),
         new CartodiagramPlugin({
           defaultLayers: [
             {
