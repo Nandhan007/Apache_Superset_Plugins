@@ -169,7 +169,10 @@ export default typedMemo(function DataTable<D extends object>({
   const pageSizeRef = useRef([initialPageSize, resultsSize]);
   const hasPagination = initialPageSize > 0 && resultsSize > 0; // pageSize == 0 means no pagination
   const hasGlobalControl =
-    hasPagination || !!searchInput || renderTimeComparisonDropdown || !!actionHeader;
+    hasPagination ||
+    !!searchInput ||
+    renderTimeComparisonDropdown ||
+    !!actionHeader;
   const initialState = {
     ...initialState_,
     // zero length means all pages, the `usePagination` plugin does not
@@ -453,7 +456,16 @@ export default typedMemo(function DataTable<D extends object>({
     >
       {hasGlobalControl ? (
         <div ref={globalControlRef} className="form-inline dt-controls">
-          <StyledRow className="row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', margin: 0 }}>
+          <StyledRow
+            className="row"
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              width: '100%',
+              margin: 0,
+            }}
+          >
             <StyledSpace size="middle">
               {hasPagination ? (
                 <SelectPageSize
@@ -498,7 +510,10 @@ export default typedMemo(function DataTable<D extends object>({
                 : null}
             </StyledSpace>
             {actionHeader && (
-              <div className="dt-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div
+                className="dt-actions"
+                style={{ display: 'flex', gap: 8, alignItems: 'center' }}
+              >
                 {actionHeader}
               </div>
             )}

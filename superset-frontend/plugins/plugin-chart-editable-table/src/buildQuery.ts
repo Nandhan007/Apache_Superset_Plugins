@@ -84,13 +84,14 @@ const buildQuery: BuildQuery<TableChartFormData> = (
 
   return buildQueryContext(formDataCopy, baseQueryObject => {
     let { metrics, orderby = [], columns = [] } = baseQueryObject;
-    
+
     const uniqueFields = [
       ...(formData.rowLevelActions || []).map(action => action.uniqueField),
+      ...(formData.htmlViewerActions || []).map(action => action.uniqueField),
       ...(formData.redirectionUrls || []).map(redr => redr.uniqueField),
       ...(formData.globalRedirectionUrls || []).map(redr => redr.uniqueField),
     ].filter((field): field is string => !!field);
-      
+
     if (uniqueFields.length > 0) {
       columns = [...new Set([...columns, ...uniqueFields])];
     }

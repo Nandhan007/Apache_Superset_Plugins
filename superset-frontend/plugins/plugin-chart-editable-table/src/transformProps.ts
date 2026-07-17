@@ -226,15 +226,19 @@ const processColumns = memoizeOne(function processColumns(
   const rawPercentMetricsSet = new Set(rawPercentMetrics);
 
   const queryMode =
-    queryModeSetting === QueryMode.Aggregate || queryModeSetting === QueryMode.Raw
+    queryModeSetting === QueryMode.Aggregate ||
+    queryModeSetting === QueryMode.Raw
       ? queryModeSetting
       : allColumns_ && allColumns_.length > 0
         ? QueryMode.Raw
         : QueryMode.Aggregate;
 
-  const uniqueFields = (rowLevelActions || [])
-    .map(action => action.uniqueField)
-    .filter((field): field is string => !!field);
+  const uniqueFields = [
+    ...(rowLevelActions || []).map(action => action.uniqueField),
+    ...(props.rawFormData?.htmlViewerActions || []).map((action: any) => action.uniqueField),
+    ...(props.rawFormData?.redirectionUrls || []).map((redr: any) => redr.uniqueField),
+    ...(props.rawFormData?.globalRedirectionUrls || []).map((redr: any) => redr.uniqueField),
+  ].filter((field): field is string => !!field);
 
   const isUniqueFieldHidden = (key: string) => {
     if (!uniqueFields.includes(key)) {
@@ -537,6 +541,7 @@ const transformProps = (
     excludeOptionFilter,
     redirectionUrls,
     globalRedirectionUrls,
+    htmlViewerActions,
   } = formData;
   const slice_id = chartId || formSliceId;
   const isUsingTimeComparison =
@@ -806,12 +811,14 @@ const transformProps = (
     datasource: (chartProps.datasource as { tableName?: string })?.tableName,
     datasourceId: (chartProps.datasource as { id?: number })?.id,
     datasourceType: (chartProps.datasource as { type?: string })?.type,
-    allColumns: (chartProps.datasource as { columns?: { column_name: string; groupby?: boolean }[] })?.columns?.map(
-      col => ({
-        column_name: col.column_name,
-        groupby: !!col.groupby,
-      }),
-    ),
+    allColumns: (
+      chartProps.datasource as {
+        columns?: { column_name: string; groupby?: boolean }[];
+      }
+    )?.columns?.map(col => ({
+      column_name: col.column_name,
+      groupby: !!col.groupby,
+    })),
     setControlValue,
     isRefreshing,
     hierarchyFields,
@@ -822,6 +829,7 @@ const transformProps = (
     redirectionUrls,
     globalRedirectionUrls,
     enableLayout: formData.enableLayout !== false,
+    htmlViewerActions,
   };
 };
 

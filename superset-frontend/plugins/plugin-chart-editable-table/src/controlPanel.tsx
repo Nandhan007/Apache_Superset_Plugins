@@ -61,6 +61,7 @@ import HierarchyFieldsControl from './components/HierarchyFieldsControl';
 import CellEditPayloadMappingControl from './components/CellEditPayloadMappingControl';
 import ChartLevelActionsControl from './components/ChartLevelActionsControl';
 import RowLevelActionsControl from './components/RowLevelActionsControl';
+import HTMLViewerActionsControl from './components/HTMLViewerActionsControl';
 import RedirectionConfigControl from './components/RedirectionConfigControl';
 
 function getQueryMode(controls: ControlStateMapping): QueryMode {
@@ -493,34 +494,44 @@ const config: ControlPanelConfig = {
               type: 'SelectControl',
               multi: true,
               label: t('Editable Metrics'),
-              description: t('Select specific metrics to enforce their editability.'),
+              description: t(
+                'Select specific metrics to enforce their editability.',
+              ),
               default: [],
               renderTrigger: true,
               // Simple visibility logic: show if any metrics selected or just always show
-              visibility: ({ controls }) => true, 
+              visibility: ({ controls }) => true,
               mapStateToProps: (state: ControlPanelState) => {
-                 const formMetrics = ensureIsArray(state?.controls?.metrics?.value || state?.form_data?.metrics);
-                 const datasourceMetrics = (state?.datasource as Dataset)?.metrics || [];
-                 const choices = formMetrics.map((metric: any) => {
-                      if (!metric) return null;
-                      let metricValue = '';
-                      let metricLabel = '';
-                      if (typeof metric === 'string') {
-                           metricValue = metric;
-                           const mDef = datasourceMetrics.find((m: any) => m.metric_name === metric);
-                           metricLabel = mDef?.verbose_name || mDef?.metric_name || metric;
-                      } else if (metric?.label) {
-                           metricValue = metric.label;
-                           metricLabel = metric.label;
-                      }
-                      
-                      if (!metricValue) return null;
-                      return [metricValue, metricLabel];
-                 }).filter(Boolean) as [string, string][];
-                 return { choices };
-              }
-            }
-          }
+                const formMetrics = ensureIsArray(
+                  state?.controls?.metrics?.value || state?.form_data?.metrics,
+                );
+                const datasourceMetrics =
+                  (state?.datasource as Dataset)?.metrics || [];
+                const choices = formMetrics
+                  .map((metric: any) => {
+                    if (!metric) return null;
+                    let metricValue = '';
+                    let metricLabel = '';
+                    if (typeof metric === 'string') {
+                      metricValue = metric;
+                      const mDef = datasourceMetrics.find(
+                        (m: any) => m.metric_name === metric,
+                      );
+                      metricLabel =
+                        mDef?.verbose_name || mDef?.metric_name || metric;
+                    } else if (metric?.label) {
+                      metricValue = metric.label;
+                      metricLabel = metric.label;
+                    }
+
+                    if (!metricValue) return null;
+                    return [metricValue, metricLabel];
+                  })
+                  .filter(Boolean) as [string, string][];
+                return { choices };
+              },
+            },
+          },
         ],
         [
           {
@@ -530,7 +541,9 @@ const config: ControlPanelConfig = {
               label: t('Enable Layout Editor'),
               renderTrigger: true,
               default: true,
-              description: t('Show the "Layout" button to allow users to customize columns/metrics layout.'),
+              description: t(
+                'Show the "Layout" button to allow users to customize columns/metrics layout.',
+              ),
             },
           },
         ],
@@ -547,7 +560,9 @@ const config: ControlPanelConfig = {
             config: {
               type: 'TextControl',
               label: t('BackendUrl'),
-              description: t('Full URL for the backend API (e.g., https://api.example.com/update/data)'),
+              description: t(
+                'Full URL for the backend API (e.g., https://api.example.com/update/data)',
+              ),
               default: '',
               renderTrigger: true,
             },
@@ -559,7 +574,9 @@ const config: ControlPanelConfig = {
             config: {
               type: CellEditPayloadMappingControl,
               label: t('Cell Edit Payload Mapping'),
-              description: t('Optional JSON template for custom cell edit payload mapping.'),
+              description: t(
+                'Optional JSON template for custom cell edit payload mapping.',
+              ),
               default: '',
               renderTrigger: true,
             },
@@ -578,16 +595,20 @@ const config: ControlPanelConfig = {
             config: {
               type: HierarchyFieldsControl,
               label: t('Hierarchy Fields'),
-              description: t('Define parent-child relationships between fields'),
+              description: t(
+                'Define parent-child relationships between fields',
+              ),
               renderTrigger: true,
               default: [],
               mapStateToProps: (state: ControlPanelState) => {
-                  const datasource = (state.datasource as Dataset) || (state as any).explore?.datasource;
-                  const allColumns = datasource?.columns  || [];
-                  const validColumns = allColumns.filter((c: any) => c.groupby);
-                  return {
-                      datasourceColumns: validColumns,
-                  };
+                const datasource =
+                  (state.datasource as Dataset) ||
+                  (state as any).explore?.datasource;
+                const allColumns = datasource?.columns || [];
+                const validColumns = allColumns.filter((c: any) => c.groupby);
+                return {
+                  datasourceColumns: validColumns,
+                };
               },
             },
           },
@@ -602,14 +623,16 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: [],
               mapStateToProps: (state: ControlPanelState) => {
-                  const datasource = (state.datasource as Dataset) || (state as any).explore?.datasource;
-                  const allColumns = datasource?.columns || [];
-                  const validColumns = allColumns.filter((c: any) => c.groupby);
-                  return {
-                      datasourceColumns: validColumns,
-                      allColumns: allColumns,
-                      hierarchyFields: state.controls?.hierarchyFields?.value || [],
-                  };
+                const datasource =
+                  (state.datasource as Dataset) ||
+                  (state as any).explore?.datasource;
+                const allColumns = datasource?.columns || [];
+                const validColumns = allColumns.filter((c: any) => c.groupby);
+                return {
+                  datasourceColumns: validColumns,
+                  allColumns: allColumns,
+                  hierarchyFields: state.controls?.hierarchyFields?.value || [],
+                };
               },
             },
           },
@@ -624,14 +647,39 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: [],
               mapStateToProps: (state: ControlPanelState) => {
-                  const datasource = (state.datasource as Dataset) || (state as any).explore?.datasource;
-                  const columnsList = datasource?.columns || [];
-                  const validColumns = columnsList.filter((c: any) => c.groupby);
-                  return {
-                      datasourceColumns: validColumns,
-                      allColumns: columnsList,
-                      hierarchyFields: state.controls?.hierarchyFields?.value || [],
-                  };
+                const datasource =
+                  (state.datasource as Dataset) ||
+                  (state as any).explore?.datasource;
+                const columnsList = datasource?.columns || [];
+                const validColumns = columnsList.filter((c: any) => c.groupby);
+                return {
+                  datasourceColumns: validColumns,
+                  allColumns: columnsList,
+                  hierarchyFields: state.controls?.hierarchyFields?.value || [],
+                };
+              },
+            },
+          },
+        ],
+        [
+          {
+            name: 'htmlViewerActions',
+            config: {
+              type: HTMLViewerActionsControl,
+              label: t('HTML Viewer Actions'),
+              description: t(
+                'Add action buttons that open modals rendering custom HTML/Handlebars templates',
+              ),
+              renderTrigger: true,
+              default: [],
+              mapStateToProps: (state: ControlPanelState) => {
+                const datasource =
+                  (state.datasource as Dataset) ||
+                  (state as any).explore?.datasource;
+                const columnsList = datasource?.columns || [];
+                return {
+                  allColumns: columnsList,
+                };
               },
             },
           },
@@ -663,16 +711,20 @@ const config: ControlPanelConfig = {
             config: {
               type: RedirectionConfigControl,
               label: t('Redirection URLs'),
-              description: t('Configure redirection links for the row hamburger menu'),
+              description: t(
+                'Configure redirection links for the row hamburger menu',
+              ),
               renderTrigger: true,
               dontRefreshOnChange: true,
               default: [],
               mapStateToProps: (state: ControlPanelState) => {
-                  const datasource = (state.datasource as Dataset) || (state as any).explore?.datasource;
-                  const columnsList = datasource?.columns || [];
-                  return {
-                      allColumns: columnsList,
-                  };
+                const datasource =
+                  (state.datasource as Dataset) ||
+                  (state as any).explore?.datasource;
+                const columnsList = datasource?.columns || [];
+                return {
+                  allColumns: columnsList,
+                };
               },
             },
           },
@@ -683,17 +735,21 @@ const config: ControlPanelConfig = {
             config: {
               type: RedirectionConfigControl,
               label: t('Global Redirection URLs'),
-              description: t('Configure top-level redirection links (rendered as individual action buttons)'),
+              description: t(
+                'Configure top-level redirection links (rendered as individual action buttons)',
+              ),
               renderTrigger: true,
               dontRefreshOnChange: true,
               default: [],
               isGlobal: true,
               mapStateToProps: (state: ControlPanelState) => {
-                  const datasource = (state.datasource as Dataset) || (state as any).explore?.datasource;
-                  const columnsList = datasource?.columns || [];
-                  return {
-                      allColumns: columnsList,
-                  };
+                const datasource =
+                  (state.datasource as Dataset) ||
+                  (state as any).explore?.datasource;
+                const columnsList = datasource?.columns || [];
+                return {
+                  allColumns: columnsList,
+                };
               },
             },
           },

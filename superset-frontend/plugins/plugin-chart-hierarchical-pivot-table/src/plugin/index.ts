@@ -53,12 +53,17 @@ export default class HierarchicalPivotTableChartPlugin extends ChartPlugin<
         Behavior.DrillBy,
       ],
       category: t('Table'),
-      description: t(
-        'Hierarchical Pivot Table with Dependent Forms',
-      ),
+      description: t('Hierarchical Pivot Table with Dependent Forms'),
       exampleGallery: [{ url: example }],
       name: t('Hierarchical Pivot Table'),
-      tags: [t('Additive'), t('Report'), t('Tabular'), t('Featured'), t('Hierarchical'), t('Planning')],
+      tags: [
+        t('Additive'),
+        t('Report'),
+        t('Tabular'),
+        t('Featured'),
+        t('Hierarchical'),
+        t('Planning'),
+      ],
       thumbnail,
     });
 

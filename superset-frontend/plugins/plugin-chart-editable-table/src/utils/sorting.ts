@@ -8,23 +8,45 @@ export const getCustomSortKey = (val: any, useCustomSorting?: boolean): any => {
     if (!y) return '00';
     const trimmed = y.trim().replace(/^['`]/, '');
     if (trimmed.length === 2) {
-        return '20' + trimmed;
+      return '20' + trimmed;
     }
     return trimmed;
   };
 
-  const monthNames: Record<string, string> = { 
-    jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', 
-    jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
-    january: '01', february: '02', march: '03', april: '04', june: '06', 
-    july: '07', august: '08', september: '09', october: '10', november: '11', december: '12'
+  const monthNames: Record<string, string> = {
+    jan: '01',
+    feb: '02',
+    mar: '03',
+    apr: '04',
+    may: '05',
+    jun: '06',
+    jul: '07',
+    aug: '08',
+    sep: '09',
+    oct: '10',
+    nov: '11',
+    dec: '12',
+    january: '01',
+    february: '02',
+    march: '03',
+    april: '04',
+    june: '06',
+    july: '07',
+    august: '08',
+    september: '09',
+    october: '10',
+    november: '11',
+    december: '12',
   };
 
-  const monthListRegexStr = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
+  const monthListRegexStr =
+    'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
 
   // 1. Month with Year (e.g. "Jan 2024" or "2024 Jan" or "2024-Jan" or "Jan-24")
   const yearMatch = trimmedVal.match(/\b(?:20|19)?\d{2}\b/);
-  const monthMatch = trimmedVal.match(new RegExp(`\\b(${monthListRegexStr})\\b`, 'i'));
+  const monthMatch = trimmedVal.match(
+    new RegExp(`\\b(${monthListRegexStr})\\b`, 'i'),
+  );
 
   if (monthMatch) {
     const mName = monthMatch[1].toLowerCase();
@@ -46,7 +68,9 @@ export const getCustomSortKey = (val: any, useCustomSorting?: boolean): any => {
   }
 
   // 3. Half with Year (e.g. "H1 2024", "2024 H1", "H1-24", "1st Half 25")
-  const halfMatch = trimmedVal.match(/\bH([1-2])\b/i) || trimmedVal.match(/\b([1-2])(st|nd)\s+Half\b/i);
+  const halfMatch =
+    trimmedVal.match(/\bH([1-2])\b/i) ||
+    trimmedVal.match(/\b([1-2])(st|nd)\s+Half\b/i);
   if (halfMatch) {
     const halfNum = halfMatch[1] || halfMatch[2];
     let yearStr = '00';
@@ -68,8 +92,16 @@ export const getCustomSortKey = (val: any, useCustomSorting?: boolean): any => {
   }
 
   // 5. Season with Year (e.g. "Spring 2024", "2024 Spring", "Spring-24")
-  const seasonNames: Record<string, string> = { spring: '01', summer: '02', fall: '03', autumn: '03', winter: '04' };
-  const seasonMatch = trimmedVal.match(/\b(spring|summer|fall|autumn|winter)\b/i);
+  const seasonNames: Record<string, string> = {
+    spring: '01',
+    summer: '02',
+    fall: '03',
+    autumn: '03',
+    winter: '04',
+  };
+  const seasonMatch = trimmedVal.match(
+    /\b(spring|summer|fall|autumn|winter)\b/i,
+  );
   if (seasonMatch) {
     const sName = seasonMatch[1].toLowerCase();
     let yearStr = '00';
@@ -81,10 +113,24 @@ export const getCustomSortKey = (val: any, useCustomSorting?: boolean): any => {
 
   // 6. Day of Week (e.g. "Monday", "Mon", etc.)
   const dayNames: Record<string, string> = {
-    mon: '1', tue: '2', wed: '3', thu: '4', fri: '5', sat: '6', sun: '7',
-    monday: '1', tuesday: '2', wednesday: '3', thursday: '4', friday: '5', saturday: '6', sunday: '7'
+    mon: '1',
+    tue: '2',
+    wed: '3',
+    thu: '4',
+    fri: '5',
+    sat: '6',
+    sun: '7',
+    monday: '1',
+    tuesday: '2',
+    wednesday: '3',
+    thursday: '4',
+    friday: '5',
+    saturday: '6',
+    sunday: '7',
   };
-  const dayMatch = trimmedVal.match(/\b(mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b/i);
+  const dayMatch = trimmedVal.match(
+    /\b(mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b/i,
+  );
   if (dayMatch) {
     return dayNames[dayMatch[1].toLowerCase()];
   }

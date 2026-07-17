@@ -91,13 +91,26 @@ export default function RedirectionConfigControl({
         renderItem={(item, index) => (
           <List.Item
             actions={[
-              <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(index)} />,
-              <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete(index)} />,
+              <Button
+                type="link"
+                icon={<EditOutlined />}
+                onClick={() => handleEdit(index)}
+              />,
+              <Button
+                type="link"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => handleDelete(index)}
+              />,
             ]}
           >
             <List.Item.Meta
-              title={item.label || (isGlobal ? t('Untitled Global Redirection') : t('Untitled Redirection'))}
-              
+              title={
+                item.label ||
+                (isGlobal
+                  ? t('Untitled Global Redirection')
+                  : t('Untitled Redirection'))
+              }
             />
           </List.Item>
         )}
@@ -108,11 +121,21 @@ export default function RedirectionConfigControl({
         style={{ width: '100%', marginTop: 8 }}
         icon={<PlusOutlined />}
       >
-        {isGlobal ? t('Add Global Redirection Link') : t('Add Redirection Link')}
+        {isGlobal
+          ? t('Add Global Redirection Link')
+          : t('Add Redirection Link')}
       </Button>
 
       <Modal
-        title={editingIndex !== null ? (isGlobal ? t('Edit Global Redirection Link') : t('Edit Redirection Link')) : (isGlobal ? t('Add Global Redirection Link') : t('Add Redirection Link'))}
+        title={
+          editingIndex !== null
+            ? isGlobal
+              ? t('Edit Global Redirection Link')
+              : t('Edit Redirection Link')
+            : isGlobal
+              ? t('Add Global Redirection Link')
+              : t('Add Redirection Link')
+        }
         open={isModalVisible}
         onOk={handleOk}
         onCancel={() => setIsModalVisible(false)}
@@ -129,9 +152,13 @@ export default function RedirectionConfigControl({
           <Form.Item
             name="url"
             label={t('Redirection URL')}
-            rules={[{ required: true, message: t('Please input a redirection URL') }]}
+            rules={[
+              { required: true, message: t('Please input a redirection URL') },
+            ]}
           >
-            <Input placeholder={t('e.g. https://google.com/search?q={store_name}')} />
+            <Input
+              placeholder={t('e.g. https://google.com/search?q={store_name}')}
+            />
           </Form.Item>
           <Form.Item
             name="openInNewTab"
@@ -141,10 +168,7 @@ export default function RedirectionConfigControl({
             <Checkbox>{t('Open in New Tab')}</Checkbox>
           </Form.Item>
           {!isGlobal && (
-            <Form.Item
-              name="addDimensionsAsParams"
-              valuePropName="checked"
-            >
+            <Form.Item name="addDimensionsAsParams" valuePropName="checked">
               <Checkbox>{t('Add Dimensions as Filter Params')}</Checkbox>
             </Form.Item>
           )}

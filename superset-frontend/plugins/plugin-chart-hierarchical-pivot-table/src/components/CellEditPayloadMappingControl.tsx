@@ -30,7 +30,10 @@ interface CellEditPayloadMappingControlProps {
   onChange: (value: string) => void;
 }
 
-export default function CellEditPayloadMappingControl({ value = '', onChange }: CellEditPayloadMappingControlProps) {
+export default function CellEditPayloadMappingControl({
+  value = '',
+  onChange,
+}: CellEditPayloadMappingControlProps) {
   const [textValue, setTextValue] = useState<string>(value);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +60,13 @@ export default function CellEditPayloadMappingControl({ value = '', onChange }: 
 
   return (
     <div>
-      <div style={{ border: '1px solid #d9d9d9', borderRadius: '4px', overflow: 'hidden' }}>
+      <div
+        style={{
+          border: '1px solid #d9d9d9',
+          borderRadius: '4px',
+          overflow: 'hidden',
+        }}
+      >
         <AceEditor
           mode="json"
           theme="github"
@@ -79,18 +88,18 @@ export default function CellEditPayloadMappingControl({ value = '', onChange }: 
             enableSnippets: true,
             showLineNumbers: true,
             showGutter: true,
-            useWorker: false, 
+            useWorker: false,
           }}
         />
       </div>
       {error && (
-         <Alert 
-           type="error" 
-           message={t('Invalid JSON format')} 
-           description={error} 
-           showIcon 
-           style={{ marginTop: 8 }} 
-         />
+        <Alert
+          type="error"
+          message={t('Invalid JSON format')}
+          description={error}
+          showIcon
+          style={{ marginTop: 8 }}
+        />
       )}
     </div>
   );

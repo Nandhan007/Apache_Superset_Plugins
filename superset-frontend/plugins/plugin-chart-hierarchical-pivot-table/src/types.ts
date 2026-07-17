@@ -32,7 +32,12 @@ import {
   HandlerFunction,
 } from '@superset-ui/core';
 import { ColorFormatters } from '@superset-ui/chart-controls';
-import { HierarchyFieldConfig, ChartLevelActionConfig, RowLevelActionConfig } from './types/hierarchy';
+import {
+  HierarchyFieldConfig,
+  ChartLevelActionConfig,
+  RowLevelActionConfig,
+  HTMLViewerActionConfig,
+} from './types/hierarchy';
 
 export interface PivotTableStylesProps {
   height: number;
@@ -123,6 +128,7 @@ interface PivotTableCustomizeProps {
   redirectionUrls?: RedirectConfig[];
   globalRedirectionUrls?: RedirectConfig[];
   enableLayout?: boolean;
+  htmlViewerActions?: HTMLViewerActionConfig[];
 }
 
 export interface RedirectConfig {

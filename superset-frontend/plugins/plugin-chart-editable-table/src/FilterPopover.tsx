@@ -2,11 +2,16 @@ import { useState, useEffect } from 'react';
 import { Button, Input, Checkbox } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 
-export const FilterPopover = ({ values, selected, onSave, onCancel }: {
-    values: any[];
-    selected?: any[];
-    onSave: (vals: any[]) => void;
-    onCancel: () => void;
+export const FilterPopover = ({
+  values,
+  selected,
+  onSave,
+  onCancel,
+}: {
+  values: any[];
+  selected?: any[];
+  onSave: (vals: any[]) => void;
+  onCancel: () => void;
 }) => {
   const [internalSelected, setInternalSelected] = useState(selected || []);
   const [searchText, setSearchText] = useState('');
@@ -15,8 +20,8 @@ export const FilterPopover = ({ values, selected, onSave, onCancel }: {
     setInternalSelected(selected || []);
   }, [selected]);
 
-  const filteredValues = values.filter(v => 
-    String(v).toLowerCase().includes(searchText.toLowerCase())
+  const filteredValues = values.filter(v =>
+    String(v).toLowerCase().includes(searchText.toLowerCase()),
   );
 
   const handleSelectAll = (e: any) => {
@@ -34,11 +39,13 @@ export const FilterPopover = ({ values, selected, onSave, onCancel }: {
     });
   };
 
-  const isAllSelected = values.length > 0 && internalSelected.length === values.length;
-  const isIndeterminate = internalSelected.length > 0 && internalSelected.length < values.length;
+  const isAllSelected =
+    values.length > 0 && internalSelected.length === values.length;
+  const isIndeterminate =
+    internalSelected.length > 0 && internalSelected.length < values.length;
 
   return (
-    <div style={{ padding: 8, width: 250 }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ padding: 8, width: 250 }} onClick={e => e.stopPropagation()}>
       <Input
         prefix={<SearchOutlined />}
         placeholder="Search"
@@ -47,15 +54,23 @@ export const FilterPopover = ({ values, selected, onSave, onCancel }: {
         style={{ marginBottom: 8, width: '100%', height: 32 }}
       />
       <div style={{ marginBottom: 8 }}>
-         <Checkbox
-            indeterminate={isIndeterminate}
-            onChange={handleSelectAll}
-            checked={isAllSelected}
-         >
-            Select All
-         </Checkbox>
+        <Checkbox
+          indeterminate={isIndeterminate}
+          onChange={handleSelectAll}
+          checked={isAllSelected}
+        >
+          Select All
+        </Checkbox>
       </div>
-      <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 8, border: '1px solid #f0f0f0', padding: '4px' }}>
+      <div
+        style={{
+          maxHeight: 200,
+          overflowY: 'auto',
+          marginBottom: 8,
+          border: '1px solid #f0f0f0',
+          padding: '4px',
+        }}
+      >
         {filteredValues.map(val => (
           <div key={String(val)} style={{ marginBottom: 4 }}>
             <Checkbox
@@ -66,12 +81,24 @@ export const FilterPopover = ({ values, selected, onSave, onCancel }: {
             </Checkbox>
           </div>
         ))}
-        {filteredValues.length === 0 && <div style={{ color: '#999', textAlign: 'center' }}>No matches</div>}
+        {filteredValues.length === 0 && (
+          <div style={{ color: '#999', textAlign: 'center' }}>No matches</div>
+        )}
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <Button size="small" onClick={() => setInternalSelected([])}>Reset</Button>
-        <Button size="small" onClick={onCancel}>Cancel</Button>
-        <Button type="primary" size="small" onClick={() => onSave(internalSelected)}>Apply</Button>
+        <Button size="small" onClick={() => setInternalSelected([])}>
+          Reset
+        </Button>
+        <Button size="small" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          type="primary"
+          size="small"
+          onClick={() => onSave(internalSelected)}
+        >
+          Apply
+        </Button>
       </div>
     </div>
   );

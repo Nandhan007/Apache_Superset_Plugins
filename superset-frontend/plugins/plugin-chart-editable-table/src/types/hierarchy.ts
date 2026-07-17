@@ -11,7 +11,15 @@ export interface HierarchyFieldConfig {
   sortMethod?: 'Default' | 'Chronological';
 }
 
-export type FieldType = 'text' | 'number' | 'date' | 'checkbox' | 'textarea' | 'dropdown' | 'file' | 'hierarchy';
+export type FieldType =
+  | 'text'
+  | 'number'
+  | 'date'
+  | 'checkbox'
+  | 'textarea'
+  | 'dropdown'
+  | 'file'
+  | 'hierarchy';
 
 export interface AdditionalFieldConfig {
   name: string | string[];
@@ -28,7 +36,7 @@ export interface ChartLevelActionConfig {
   buttonIcon: string;
   modalTitle: string;
   formFields: string[];
-  additionalFields?: AdditionalFieldConfig[]; 
+  additionalFields?: AdditionalFieldConfig[];
   apiEndpoint: string;
   hierarchyFields?: string[];
   payloadMapping?: string;
@@ -48,7 +56,15 @@ export interface RowLevelActionConfig {
   uniqueField?: string;
   payloadMapping?: string;
 }
-
+export interface HTMLViewerActionConfig {
+  buttonLabel?: string;
+  buttonIcon: string;
+  modalTitle: string;
+  handlebarsTemplate: string;
+  styleTemplate?: string;
+  onlySelectedRow?: boolean;
+  uniqueField?: string;
+}
 export interface SupersetDataFormProps {
   hierarchyConfig: HierarchyFieldConfig[];
   formFields: string[];

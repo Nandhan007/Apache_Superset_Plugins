@@ -8,8 +8,11 @@ import 'ace-builds/src-min-noconflict/mode-json';
 import 'ace-builds/src-noconflict/theme-github';
 
 import { DatasourceColumn } from '../types';
-import { RowLevelActionConfig, AdditionalFieldConfig } from '../types/hierarchy';
-import AdditionalFieldsList from "./AdditionalFieldsList";
+import {
+  RowLevelActionConfig,
+  AdditionalFieldConfig,
+} from '../types/hierarchy';
+import AdditionalFieldsList from './AdditionalFieldsList';
 
 interface RowLevelActionsControlProps {
   value?: RowLevelActionConfig[];
@@ -33,16 +36,16 @@ export default function RowLevelActionsControl({
   const iconOptions = Object.keys(AntdIcons)
     .filter(k => k.endsWith('Outlined'))
     .map(k => {
-       const Icon = (AntdIcons as any)[k];
-       return {
-           label: (
-               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                   {Icon && <Icon />}
-                   <span>{k}</span>
-               </div>
-           ),
-           value: k
-       };
+      const Icon = (AntdIcons as any)[k];
+      return {
+        label: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {Icon && <Icon />}
+            <span>{k}</span>
+          </div>
+        ),
+        value: k,
+      };
     });
 
   const handleAdd = () => {
@@ -60,21 +63,23 @@ export default function RowLevelActionsControl({
   const handleOk = () => {
     form.validateFields().then(values => {
       const config: RowLevelActionConfig = {
-          buttonLabel: values.buttonLabel,
-          buttonIcon: values.buttonIcon,
-          renderMode: 'toolbar',
-          modalTitle: values.modalTitle,
-          apiEndpoint: values.apiEndpoint,
-          hierarchyFields: [],
-          additionalFields: values.additionalFields || [],
-          prefillFromRow: true, 
-          formFields: [
-              ...(values.additionalFields || []).flatMap((f: AdditionalFieldConfig) => f.name)
-          ],
-          uniqueField: values.uniqueField || undefined,
-          payloadMapping: values.payloadMapping || undefined,
+        buttonLabel: values.buttonLabel,
+        buttonIcon: values.buttonIcon,
+        renderMode: 'toolbar',
+        modalTitle: values.modalTitle,
+        apiEndpoint: values.apiEndpoint,
+        hierarchyFields: [],
+        additionalFields: values.additionalFields || [],
+        prefillFromRow: true,
+        formFields: [
+          ...(values.additionalFields || []).flatMap(
+            (f: AdditionalFieldConfig) => f.name,
+          ),
+        ],
+        uniqueField: values.uniqueField || undefined,
+        payloadMapping: values.payloadMapping || undefined,
       };
-      
+
       let newValue = [...value];
       if (editingIndex !== null) {
         newValue[editingIndex] = config;
@@ -88,33 +93,37 @@ export default function RowLevelActionsControl({
   };
 
   const getInitialValues = (index: number) => {
-      const config = value[index];
-      const initial: any = { ...config };
-      
-      if (initial.hierarchyFields || initial.additionalFields || initial.renderMode) {
-          return initial;
-      }
-      
-      const allFields = initial.formFields || [];
-      const hierarchyFields: string[] = [];
-      const additionalFields: AdditionalFieldConfig[] = [];
-      const columnNames = new Set(datasourceColumns.map(c => c.column_name));
+    const config = value[index];
+    const initial: any = { ...config };
 
-      allFields.forEach((f: string) => {
-        if (columnNames.has(f)) {
-            hierarchyFields.push(f);
-        } else {
-            additionalFields.push({
-                name: f,
-                type: 'text',
-                required: false
-            });
-        }
-      });
-      
-      initial.hierarchyFields = hierarchyFields;
-      initial.additionalFields = additionalFields;
+    if (
+      initial.hierarchyFields ||
+      initial.additionalFields ||
+      initial.renderMode
+    ) {
       return initial;
+    }
+
+    const allFields = initial.formFields || [];
+    const hierarchyFields: string[] = [];
+    const additionalFields: AdditionalFieldConfig[] = [];
+    const columnNames = new Set(datasourceColumns.map(c => c.column_name));
+
+    allFields.forEach((f: string) => {
+      if (columnNames.has(f)) {
+        hierarchyFields.push(f);
+      } else {
+        additionalFields.push({
+          name: f,
+          type: 'text',
+          required: false,
+        });
+      }
+    });
+
+    initial.hierarchyFields = hierarchyFields;
+    initial.additionalFields = additionalFields;
+    return initial;
   };
 
   const handleEdit = (index: number) => {
@@ -122,7 +131,7 @@ export default function RowLevelActionsControl({
     form.setFieldsValue(getInitialValues(index));
     setIsModalVisible(true);
   };
-    
+
   return (
     <div>
       <List
@@ -130,19 +139,35 @@ export default function RowLevelActionsControl({
         bordered
         dataSource={value}
         renderItem={(item, index) => {
-          const IconComponent = item.buttonIcon ? (AntdIcons as any)[item.buttonIcon] : null;
+          const IconComponent = item.buttonIcon
+            ? (AntdIcons as any)[item.buttonIcon]
+            : null;
           return (
             <List.Item
               actions={[
-                <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(index)} />,
-                <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete(index)} />,
+                <Button
+                  type="link"
+                  icon={<EditOutlined />}
+                  onClick={() => handleEdit(index)}
+                />,
+                <Button
+                  type="link"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => handleDelete(index)}
+                />,
               ]}
             >
               <List.Item.Meta
                 title={
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {IconComponent && <IconComponent />}
-                      <span>{item.buttonLabel || `Action (${item.buttonIcon || 'unnamed'})`}</span>
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                  >
+                    {IconComponent && <IconComponent />}
+                    <span>
+                      {item.buttonLabel ||
+                        `Action (${item.buttonIcon || 'unnamed'})`}
+                    </span>
                   </div>
                 }
               />
@@ -150,12 +175,19 @@ export default function RowLevelActionsControl({
           );
         }}
       />
-      <Button type="dashed" onClick={handleAdd} style={{ width: '100%', marginTop: 8 }} icon={<PlusOutlined />}>
+      <Button
+        type="dashed"
+        onClick={handleAdd}
+        style={{ width: '100%', marginTop: 8 }}
+        icon={<PlusOutlined />}
+      >
         {t('Add Row Action')}
       </Button>
 
       <Modal
-        title={editingIndex !== null ? t('Edit Row Action') : t('Add Row Action')}
+        title={
+          editingIndex !== null ? t('Edit Row Action') : t('Add Row Action')
+        }
         open={isModalVisible}
         onOk={handleOk}
         onCancel={() => setIsModalVisible(false)}
@@ -165,53 +197,75 @@ export default function RowLevelActionsControl({
           <Form.Item name="buttonLabel" label={t('Button Label')}>
             <Input placeholder="e.g. Approve" />
           </Form.Item>
-          <Form.Item name="buttonIcon" label={t('Icon Name (AntDesign)')} rules={[{ required: true }]}>
-             <Select
-                showSearch
-                placeholder="Select an icon"
-                options={iconOptions}
-                filterOption={(input, option) => 
-                    (option?.value as string).toLowerCase().includes(input.toLowerCase())
-                }
-             />
+          <Form.Item
+            name="buttonIcon"
+            label={t('Icon Name (AntDesign)')}
+            rules={[{ required: true }]}
+          >
+            <Select
+              showSearch
+              placeholder="Select an icon"
+              options={iconOptions}
+              filterOption={(input, option) =>
+                (option?.value as string)
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+            />
           </Form.Item>
-          <Form.Item name="modalTitle" label={t('Modal Title')} rules={[{ required: true }]}>
-             <Input placeholder="e.g. Approve Entry" />
+          <Form.Item
+            name="modalTitle"
+            label={t('Modal Title')}
+            rules={[{ required: true }]}
+          >
+            <Input placeholder="e.g. Approve Entry" />
           </Form.Item>
-          <Form.Item name="apiEndpoint" label={t('API Endpoint')} rules={[{ required: true }]}>
-             <Input placeholder="e.g. /api/v1/planning/approve OR https://api.exa.com/v1/approve" />
+          <Form.Item
+            name="apiEndpoint"
+            label={t('API Endpoint')}
+            rules={[{ required: true }]}
+          >
+            <Input placeholder="e.g. /api/v1/planning/approve OR https://api.exa.com/v1/approve" />
           </Form.Item>
           <Form.Item name="uniqueField" label={t('Unique Column')}>
-             <Select
-                placeholder={t('Select unique column (optional)')}
-                allowClear
-                options={allColumns.map(c => ({
-                    label: c.verbose_name || c.column_name,
-                    value: c.column_name,
-                }))}
-             />
+            <Select
+              placeholder={t('Select unique column (optional)')}
+              allowClear
+              options={allColumns.map(c => ({
+                label: c.verbose_name || c.column_name,
+                value: c.column_name,
+              }))}
+            />
           </Form.Item>
-          
+
           <Form.Item name="additionalFields" label={t('Form Fields')}>
-              <AdditionalFieldsList datasourceColumns={datasourceColumns} allColumns={allColumns} hierarchyFields={hierarchyFields} />
+            <AdditionalFieldsList
+              datasourceColumns={datasourceColumns}
+              allColumns={allColumns}
+              hierarchyFields={hierarchyFields}
+            />
           </Form.Item>
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item 
-                name="payloadMapping" 
+              <Form.Item
+                name="payloadMapping"
                 label={t('Payload Mapping (JSON)')}
-                rules={[{
-                  validator: (_, val) => {
-                    if (!val) return Promise.resolve();
-                    try {
-                      JSON.parse(val);
-                      return Promise.resolve();
-                    } catch (e) {
-                      return Promise.reject(new Error(t('Must be valid JSON')));
-                    }
-                  }
-                }]}
+                rules={[
+                  {
+                    validator: (_, val) => {
+                      if (!val) return Promise.resolve();
+                      try {
+                        JSON.parse(val);
+                        return Promise.resolve();
+                      } catch (e) {
+                        return Promise.reject(
+                          new Error(t('Must be valid JSON')),
+                        );
+                      }
+                    },
+                  },
+                ]}
               >
                 <AceEditor
                   mode="json"
@@ -229,19 +283,52 @@ export default function RowLevelActionsControl({
                   setOptions={{
                     showLineNumbers: true,
                     showGutter: true,
-                    useWorker: false, 
+                    useWorker: false,
                   }}
                 />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <div style={{ fontWeight: 'normal', height: '22px', marginBottom: '8px', color: '#333' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: '100%',
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 'normal',
+                    height: '22px',
+                    marginBottom: '8px',
+                    color: '#333',
+                  }}
+                >
                   {t('Input Payload Structure Preview')}
                 </div>
-                <div style={{ fontSize: '12px', color: '#666', background: '#fafafa', padding: '12px', borderRadius: '4px', border: '1px solid #f0f0f0', height: '126px', display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-                  <pre style={{ margin: 0, fontSize: '11px', fontFamily: 'monospace', flex: 1 }}>
-{`{
+                <div
+                  style={{
+                    fontSize: '12px',
+                    color: '#666',
+                    background: '#fafafa',
+                    padding: '12px',
+                    borderRadius: '4px',
+                    border: '1px solid #f0f0f0',
+                    height: '126px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'auto',
+                  }}
+                >
+                  <pre
+                    style={{
+                      margin: 0,
+                      fontSize: '11px',
+                      fontFamily: 'monospace',
+                      flex: 1,
+                    }}
+                  >
+                    {`{
   "field_name_1": "value_1",
   "field_name_2": "value_2"
 }`}

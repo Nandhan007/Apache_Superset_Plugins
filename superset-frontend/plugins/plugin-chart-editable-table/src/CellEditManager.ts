@@ -75,10 +75,19 @@ export class CellEditManager {
     return modification ? modification.current : originalValue;
   };
 
-  setValue = (rowIndex: number, columnId: string, originalValue: any, newValue: any, record: DataRecord) => {
+  setValue = (
+    rowIndex: number,
+    columnId: string,
+    originalValue: any,
+    newValue: any,
+    record: DataRecord,
+  ) => {
     const cellKey = this.getCellKey(rowIndex, columnId);
 
-    if (newValue === originalValue || String(newValue) === String(originalValue)) {
+    if (
+      newValue === originalValue ||
+      String(newValue) === String(originalValue)
+    ) {
       this.modifications.delete(cellKey);
     } else {
       this.modifications.set(cellKey, {
@@ -105,44 +114,44 @@ export class CellEditManager {
 
     this.modifications.forEach(mod => {
       const { record, columnId, current } = mod;
-      
+
       // Separate dimensions and measures
       const dimensions: Record<string, any> = {};
       const measures: Record<string, any> = { [columnId]: current };
-      
+
       // Filter dimensions: ONLY include columns present in this.groupby
       if (this.groupby && this.groupby.length > 0) {
         this.groupby.forEach(groupCol => {
-           if (record.hasOwnProperty(groupCol)) {
-               dimensions[groupCol] = record[groupCol];
-           }
+          if (record.hasOwnProperty(groupCol)) {
+            dimensions[groupCol] = record[groupCol];
+          }
         });
       } else {
-         // Fallback if no groupby provided (though user request implies there should be)
-         // We'll mimic previous behavior but ideally we shouldn't hit this if properly configured
-         Object.keys(record).forEach(key => {
-            if (key !== columnId) {
-                dimensions[key] = record[key];
-            }
-         });
+        // Fallback if no groupby provided (though user request implies there should be)
+        // We'll mimic previous behavior but ideally we shouldn't hit this if properly configured
+        Object.keys(record).forEach(key => {
+          if (key !== columnId) {
+            dimensions[key] = record[key];
+          }
+        });
       }
 
       // Merge changes if multiple metrics changed for same row (dimensions)
       const dimensionsKey = JSON.stringify(dimensions);
-      
+
       if (processedKeys.has(dimensionsKey)) {
-         const existingEntry = processedKeys.get(dimensionsKey);
-         existingEntry.measures = { ...existingEntry.measures, ...measures };
+        const existingEntry = processedKeys.get(dimensionsKey);
+        existingEntry.measures = { ...existingEntry.measures, ...measures };
       } else {
-         const newEntry = { dimensions, measures };
-         payloadData.push(newEntry);
-         processedKeys.set(dimensionsKey, newEntry);
+        const newEntry = { dimensions, measures };
+        payloadData.push(newEntry);
+        processedKeys.set(dimensionsKey, newEntry);
       }
     });
 
     return {
-        data: payloadData,
-        datasource: this.datasource,
+      data: payloadData,
+      datasource: this.datasource,
     };
   };
 
@@ -179,7 +188,7 @@ export class CellEditManager {
         console.error('Error parsing cellEditPayloadMapping:', e);
       }
     }
-    
+
     console.log('Sending modifications:', payload);
 
     try {
@@ -189,15 +198,15 @@ export class CellEditManager {
         message: 'Success',
         description: 'Modifications sent successfully.',
       });
-      // this.clearModifications(); 
+      // this.clearModifications();
       return true;
     } catch (error) {
-       console.error('Error sending modifications:', error);
-       this.notification.error({
-         message: 'Error',
-         description: `Failed to send modifications: ${error instanceof Error ? error.message : String(error)}`,
-       });
-       return false;
+      console.error('Error sending modifications:', error);
+      this.notification.error({
+        message: 'Error',
+        description: `Failed to send modifications: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      return false;
     }
   };
 }

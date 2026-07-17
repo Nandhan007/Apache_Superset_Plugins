@@ -6,7 +6,9 @@ export type ValueRange = [number, number];
 /**
  * Return sortType based on data type
  */
-export function getSortTypeByDataType(dataType: GenericDataType): DefaultSortTypes {
+export function getSortTypeByDataType(
+  dataType: GenericDataType,
+): DefaultSortTypes {
   if (dataType === GenericDataType.Temporal) {
     return 'datetime';
   }
@@ -86,18 +88,21 @@ export const isColorDark = (color: string | undefined) => {
     // Only support hex for now as standard Superset theme uses hex
     return false;
   }
-  
+
   if (hex.length === 3) {
-    hex = hex.split('').map(c => c + c).join('');
+    hex = hex
+      .split('')
+      .map(c => c + c)
+      .join('');
   }
-  
+
   if (hex.length !== 6) return false;
-  
+
   const r = parseInt(hex.substring(0, 2), 16);
   const g = parseInt(hex.substring(2, 4), 16);
   const b = parseInt(hex.substring(4, 6), 16);
-  
+
   // Perceived brightness formula
   const brightness = (r * 299 + g * 587 + b * 114) / 1000;
   return brightness < 128; // Standard threshold
-}
+};

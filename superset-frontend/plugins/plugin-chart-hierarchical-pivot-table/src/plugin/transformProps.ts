@@ -77,7 +77,12 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     queriesData,
     formData,
     rawFormData,
-    hooks: { setDataMask = () => {}, onContextMenu, setControlValue, setForceQuery },
+    hooks: {
+      setDataMask = () => {},
+      onContextMenu,
+      setControlValue,
+      setForceQuery,
+    },
     filterState,
     datasource: { verboseMap = {}, columnFormats = {}, currencyFormats = {} },
     emitCrossFilters,
@@ -118,6 +123,7 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     excludeOptionFilter,
     redirectionUrls,
     globalRedirectionUrls,
+    htmlViewerActions,
   } = formData;
   const { selectedFilters } = filterState;
   const granularity = extractTimegrain(rawFormData);
@@ -192,17 +198,22 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     editableMetrics,
     setControlValue,
     setForceQuery,
-    datasource: (chartProps.datasource as any)?.table_name || (chartProps.datasource as any)?.tableName || (chartProps.datasource as any)?.name,
+    datasource:
+      (chartProps.datasource as any)?.table_name ||
+      (chartProps.datasource as any)?.tableName ||
+      (chartProps.datasource as any)?.name,
     datasourceId: (chartProps.datasource as { id?: number })?.id,
     datasourceType: (chartProps.datasource as { type?: string })?.type,
     sliceId: (chartProps.rawFormData as { slice_id?: number })?.slice_id,
     rawFormData: chartProps.rawFormData,
-    allColumns: (chartProps.datasource as { columns?: { column_name: string; groupby?: boolean }[] })?.columns?.map(
-      col => ({
-        column_name: col.column_name,
-        groupby: !!col.groupby,
-      }),
-    ),
+    allColumns: (
+      chartProps.datasource as {
+        columns?: { column_name: string; groupby?: boolean }[];
+      }
+    )?.columns?.map(col => ({
+      column_name: col.column_name,
+      groupby: !!col.groupby,
+    })),
     useCustomSorting,
     isRefreshing,
     hierarchyFields,
@@ -213,5 +224,6 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     redirectionUrls,
     globalRedirectionUrls,
     enableLayout: formData.enableLayout !== false,
+    htmlViewerActions,
   };
 }

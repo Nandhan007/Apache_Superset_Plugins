@@ -35,7 +35,10 @@ function DefaultSelectRenderer({
   onChange,
 }: SelectPageSizeRendererProps) {
   return (
-    <span className="dt-select-page-size form-inline" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+    <span
+      className="dt-select-page-size form-inline"
+      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+    >
       {t('Show')}{' '}
       <Select
         value={current}

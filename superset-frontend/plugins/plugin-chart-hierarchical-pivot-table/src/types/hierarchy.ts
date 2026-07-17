@@ -11,8 +11,15 @@ export interface HierarchyFieldConfig {
   sortMethod?: 'Default' | 'Chronological';
 }
 
-
-export type FieldType = 'text' | 'number' | 'date' | 'checkbox' | 'textarea' | 'dropdown' | 'file' | 'hierarchy';
+export type FieldType =
+  | 'text'
+  | 'number'
+  | 'date'
+  | 'checkbox'
+  | 'textarea'
+  | 'dropdown'
+  | 'file'
+  | 'hierarchy';
 
 export interface AdditionalFieldConfig {
   name: string | string[];
@@ -34,14 +41,14 @@ export interface ChartLevelActionConfig {
   // Let's keep formFields for *Hierarchy* fields (if applicable) and add additionalFields for *New* fields.
   // Wait, the requirement says "Add additional form fields... with deep config".
   // Currently formFields is mixed.
-  // Best approach: 
+  // Best approach:
   // - hierarchyFields: string[] (Select from existing hierarchy)
   // - additionalFields: AdditionalFieldConfig[] (Typed custom fields)
   // - `formFields` (legacy string[] support)
-  
+
   // Let's go with:
-  additionalFields?: AdditionalFieldConfig[]; 
-  
+  additionalFields?: AdditionalFieldConfig[];
+
   // Existing props
   apiEndpoint: string;
   hierarchyFields?: string[];
@@ -56,18 +63,26 @@ export interface RowLevelActionConfig {
   visibilityCondition?: string;
   prefillFromRow?: boolean;
   renderMode?: 'inline' | 'toolbar';
-  
+
   // Hierarchy fields (strings) - matches ChartLevelActionConfig
   hierarchyFields?: string[];
-  
+
   // Custom/Additional fields with type
   additionalFields?: AdditionalFieldConfig[];
 
-
-  
   // Legacy
   formFields?: string[];
   payloadMapping?: string;
+}
+
+export interface HTMLViewerActionConfig {
+  buttonLabel?: string;
+  buttonIcon: string;
+  modalTitle: string;
+  handlebarsTemplate: string;
+  styleTemplate?: string;
+  onlySelectedRow?: boolean;
+  uniqueField?: string;
 }
 
 export interface SupersetDataFormProps {

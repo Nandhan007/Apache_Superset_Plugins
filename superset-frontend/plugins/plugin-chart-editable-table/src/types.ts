@@ -35,7 +35,12 @@ import {
 } from '@superset-ui/core';
 import { GenericDataType } from '@apache-superset/core/common';
 import { ColorFormatters } from '@superset-ui/chart-controls';
-import { HierarchyFieldConfig, ChartLevelActionConfig, RowLevelActionConfig } from './types/hierarchy';
+import {
+  HierarchyFieldConfig,
+  ChartLevelActionConfig,
+  RowLevelActionConfig,
+  HTMLViewerActionConfig,
+} from './types/hierarchy';
 
 export type CustomFormatter = (value: DataRecordValue) => string;
 
@@ -120,6 +125,7 @@ export type TableChartFormData = QueryFormData & {
   redirectionUrls?: RedirectConfig[];
   globalRedirectionUrls?: RedirectConfig[];
   enableLayout?: boolean;
+  htmlViewerActions?: HTMLViewerActionConfig[];
 };
 
 export interface TableChartProps extends ChartProps {
@@ -229,6 +235,7 @@ export interface TableChartTransformedProps<D extends DataRecord = DataRecord> {
   redirectionUrls?: RedirectConfig[];
   globalRedirectionUrls?: RedirectConfig[];
   enableLayout?: boolean;
+  htmlViewerActions?: HTMLViewerActionConfig[];
 }
 
 export interface RedirectConfig {

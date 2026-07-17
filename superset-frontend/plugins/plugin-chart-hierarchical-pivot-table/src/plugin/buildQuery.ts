@@ -31,11 +31,17 @@ export default function buildQuery(formData: PivotTableQueryFormData) {
   const time_grain_sqla =
     extra_form_data?.time_grain_sqla || formData.time_grain_sqla;
 
+  const uniqueFields = [
+    ...(formData.rowLevelActions || []).map((action: any) => action.uniqueField),
+    ...(formData.htmlViewerActions || []).map((action: any) => action.uniqueField),
+  ].filter((field): field is string => !!field);
+
   // TODO: add deduping of AdhocColumns
   const columns = Array.from(
     new Set([
       ...ensureIsArray<QueryFormColumn>(groupbyColumns),
       ...ensureIsArray<QueryFormColumn>(groupbyRows),
+      ...uniqueFields,
     ]),
   ).map(col => {
     if (
