@@ -57,7 +57,7 @@ import {
   RawAntdSelect as Select,
   Tooltip,
 } from '@superset-ui/core/components';
-import { Popover, notification, Dropdown, List, Spin } from 'antd';
+import { Alert, Popover, notification, Dropdown, List, Spin } from 'antd';
 import {
   CheckOutlined,
   InfoCircleOutlined,
@@ -599,6 +599,7 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
     enableLayout,
     metrics = [],
     htmlViewerActions = [],
+    validationError,
   } = props;
   // Layout Editor State
   const [layoutItems, setLayoutItems] = useState<string[]>(
@@ -610,6 +611,16 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
 
   const [fetchedColumns, setFetchedColumns] = useState<DatasourceColumn[]>([]);
   const [fetchedMetrics, setFetchedMetrics] = useState<DatasourceMetric[]>([]);
+
+  useEffect(() => {
+    if (validationError) {
+      notification.error({
+        message: t('Validation Error'),
+        description: validationError,
+        duration: 10,
+      });
+    }
+  }, [validationError]);
 
   const allAvailableMetrics = useMemo(() => {
     const list = [...fetchedMetrics];
@@ -1252,6 +1263,7 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
               column_name: col.column_name,
               groupby: col.groupby,
               verbose_name: col.verbose_name,
+              expression: col.expression,
             })) || [];
           setFetchedColumns(columns);
           const metrics =
@@ -2343,9 +2355,12 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
           .map(action => action.uniqueField)
           .filter((field): field is string => !!field);
 
-        const uniqueFields = [...(rowLevelActions || [])
-          .map(action => action.uniqueField)
-          .filter((field): field is string => !!field), ...htmlUniqueFields];
+        const uniqueFields = [
+          ...(rowLevelActions || [])
+            .map(action => action.uniqueField)
+            .filter((field): field is string => !!field),
+          ...htmlUniqueFields,
+        ];
 
         uniqueFields.forEach(field => {
           if (!groupby.includes(field)) {
@@ -2391,7 +2406,14 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
       disableSortBy: true,
       disableFilters: true,
     }),
-    [groupbyRows, selectedRowData, handleRowSelectionChange, hasUniqueField, rowLevelActions, htmlViewerActions],
+    [
+      groupbyRows,
+      selectedRowData,
+      handleRowSelectionChange,
+      hasUniqueField,
+      rowLevelActions,
+      htmlViewerActions,
+    ],
   );
 
   const redirectionColumn = useMemo(
@@ -2446,7 +2468,8 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
       colsList.unshift(redirectionColumn as any);
     }
     const hasRowLevelActions = rowLevelActions && rowLevelActions.length > 0;
-    const hasHtmlViewerRowSelection = htmlViewerActions && htmlViewerActions.length > 0;
+    const hasHtmlViewerRowSelection =
+      htmlViewerActions && htmlViewerActions.length > 0;
     if (hasRowLevelActions || hasHtmlViewerRowSelection) {
       colsList.unshift(checkboxColumn as any);
     }
@@ -2739,6 +2762,21 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
       enableLayout,
     ],
   );
+
+  if (validationError) {
+    return (
+      <Styles>
+        <div style={{ padding: 16 }}>
+          <Alert
+            type="error"
+            message={t('Validation Error')}
+            description={validationError}
+            showIcon
+          />
+        </div>
+      </Styles>
+    );
+  }
 
   return (
     <Styles>

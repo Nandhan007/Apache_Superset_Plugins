@@ -34,12 +34,102 @@ import {
 } from '@superset-ui/core';
 import { t } from '@apache-superset/core/translation';
 import { MetricsLayoutEnum } from '../types';
-import HierarchyFieldsControl from '../components/HierarchyFieldsControl';
 import CellEditPayloadMappingControl from '../components/CellEditPayloadMappingControl';
 import ChartLevelActionsControl from '../components/ChartLevelActionsControl';
 import RowLevelActionsControl from '../components/RowLevelActionsControl';
 import HTMLViewerActionsControl from '../components/HTMLViewerActionsControl';
 import RedirectionConfigControl from '../components/RedirectionConfigControl';
+
+function parseExpressionJson(expression: string): any {
+  if (!expression) return null;
+  const cleanExpr = expression.trim();
+
+  const firstArray = cleanExpr.indexOf('[');
+  const firstObject = cleanExpr.indexOf('{');
+  const lastArray = cleanExpr.lastIndexOf(']');
+  const lastObject = cleanExpr.lastIndexOf('}');
+
+  let startIdx = -1;
+  let endIdx = -1;
+
+  if (firstArray !== -1 && (firstObject === -1 || firstArray < firstObject)) {
+    startIdx = firstArray;
+    endIdx = lastArray;
+  } else if (firstObject !== -1) {
+    startIdx = firstObject;
+    endIdx = lastObject;
+  }
+
+  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+    return null;
+  }
+
+  let jsonCandidate = cleanExpr.slice(startIdx, endIdx + 1);
+
+  if (jsonCandidate.includes("''")) {
+    jsonCandidate = jsonCandidate.replace(/''/g, "'");
+  }
+  if (jsonCandidate.includes('\\"')) {
+    jsonCandidate = jsonCandidate.replace(/\\"/g, '"');
+  }
+  if (jsonCandidate.includes("\\'")) {
+    jsonCandidate = jsonCandidate.replace(/\\'/g, "'");
+  }
+
+  if (jsonCandidate.startsWith('{') && jsonCandidate.endsWith('}')) {
+    const inner = jsonCandidate.slice(1, -1).trim();
+    if (inner.startsWith('{') && inner.endsWith('}')) {
+      jsonCandidate = `[${inner}]`;
+    }
+  }
+
+  try {
+    return JSON.parse(jsonCandidate);
+  } catch (e) {
+    try {
+      const doubleQuoteJson = jsonCandidate.replace(/'/g, '"');
+      return JSON.parse(doubleQuoteJson);
+    } catch (_e2) {
+      console.error('Failed to parse expression JSON:', expression, e);
+      return null;
+    }
+  }
+}
+
+function validateHierarchyJson(parsed: any, colName: string): void {
+  if (parsed === null || parsed === undefined) {
+    throw new Error(
+      `Invalid hierarchy configuration on column "${colName}". Please ensure it contains a valid JSON string.`,
+    );
+  }
+  const items = Array.isArray(parsed) ? parsed : [parsed];
+  if (items.length === 0) {
+    throw new Error(
+      `The hierarchy configuration on column "${colName}" is empty.`,
+    );
+  }
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i];
+    if (
+      typeof item !== 'object' ||
+      item === null ||
+      typeof item.columnName !== 'string' ||
+      !item.columnName.trim() ||
+      typeof item.fieldName !== 'string' ||
+      !item.fieldName.trim() ||
+      typeof item.fieldLabel !== 'string' ||
+      !item.fieldLabel.trim() ||
+      typeof item.level !== 'number' ||
+      Number.isNaN(item.level) ||
+      typeof item.hierarchyGroup !== 'string' ||
+      !item.hierarchyGroup.trim()
+    ) {
+      throw new Error(
+        `Invalid hierarchy structure on column "${colName}". Please ensure the JSON configuration includes all required properties (columnName, fieldName, fieldLabel, level, and hierarchyGroup).`,
+      );
+    }
+  }
+}
 
 const config: ControlPanelConfig = {
   controlPanelSections: [
@@ -171,25 +261,16 @@ const config: ControlPanelConfig = {
       controlSetRows: [
         [
           {
-            name: 'hierarchyFields',
+            name: 'hierarchyColumns',
             config: {
-              type: HierarchyFieldsControl,
-              label: t('Hierarchy Fields'),
+              ...sharedControls.groupby,
+              label: t('Hierarchy Columns'),
               description: t(
-                'Define parent-child relationships between fields',
+                'Select column(s) containing JSON configuration for hierarchy',
               ),
               renderTrigger: true,
+              rerender: ['chartLevelActions', 'rowLevelActions'],
               default: [],
-              mapStateToProps: (state: ControlPanelState) => {
-                const datasource =
-                  (state.datasource as Dataset) ||
-                  (state as any).explore?.datasource;
-                const allColumns = datasource?.columns || [];
-                const validColumns = allColumns.filter((c: any) => c.groupby);
-                return {
-                  datasourceColumns: validColumns,
-                };
-              },
             },
           },
         ],
@@ -202,16 +283,61 @@ const config: ControlPanelConfig = {
               description: t('Buttons at the top of the chart'),
               renderTrigger: true,
               default: [],
-              mapStateToProps: (state: ControlPanelState) => {
+              mapStateToProps: (
+                state: ControlPanelState,
+                _controlState: any,
+                _chart: any,
+              ) => {
                 const datasource =
                   (state.datasource as Dataset) ||
                   (state as any).explore?.datasource;
                 const allColumns = datasource?.columns || [];
                 const validColumns = allColumns.filter((c: any) => c.groupby);
+                const hierarchyColumns =
+                  state.controls?.hierarchyColumns?.value || [];
+                const hierarchyFieldsList: any[] = [];
+                if (
+                  Array.isArray(allColumns) &&
+                  Array.isArray(hierarchyColumns)
+                ) {
+                  hierarchyColumns.forEach((colName: any) => {
+                    const colNameStr =
+                      typeof colName === 'object' && colName !== null
+                        ? (colName as any).column_name || (colName as any).label
+                        : colName;
+                    const colDef = allColumns.find(
+                      (c: any) => c.column_name === colNameStr,
+                    );
+                    if (colDef && colDef.expression) {
+                      try {
+                        const parsed = parseExpressionJson(colDef.expression);
+                        if (parsed) {
+                          validateHierarchyJson(parsed, colNameStr);
+                          if (Array.isArray(parsed)) {
+                            hierarchyFieldsList.push(...parsed);
+                          } else {
+                            hierarchyFieldsList.push(parsed);
+                          }
+                        }
+                      } catch (e: any) {
+                        console.warn(e.message);
+                      }
+                    }
+                  });
+                }
+                const seen = new Set<string>();
+                const hierarchyFields = hierarchyFieldsList.filter(item => {
+                  const key = item.fieldName || item.columnName;
+                  if (key && !seen.has(key)) {
+                    seen.add(key);
+                    return true;
+                  }
+                  return false;
+                });
                 return {
                   datasourceColumns: validColumns,
                   allColumns: allColumns,
-                  hierarchyFields: state.controls?.hierarchyFields?.value || [],
+                  hierarchyFields,
                 };
               },
             },
@@ -226,16 +352,61 @@ const config: ControlPanelConfig = {
               description: t('Buttons for each row'),
               renderTrigger: true,
               default: [],
-              mapStateToProps: (state: ControlPanelState) => {
+              mapStateToProps: (
+                state: ControlPanelState,
+                _controlState: any,
+                _chart: any,
+              ) => {
                 const datasource =
                   (state.datasource as Dataset) ||
                   (state as any).explore?.datasource;
                 const allColumns = datasource?.columns || [];
                 const validColumns = allColumns.filter((c: any) => c.groupby);
+                const hierarchyColumns =
+                  state.controls?.hierarchyColumns?.value || [];
+                const hierarchyFieldsList: any[] = [];
+                if (
+                  Array.isArray(allColumns) &&
+                  Array.isArray(hierarchyColumns)
+                ) {
+                  hierarchyColumns.forEach((colName: any) => {
+                    const colNameStr =
+                      typeof colName === 'object' && colName !== null
+                        ? (colName as any).column_name || (colName as any).label
+                        : colName;
+                    const colDef = allColumns.find(
+                      (c: any) => c.column_name === colNameStr,
+                    );
+                    if (colDef && colDef.expression) {
+                      try {
+                        const parsed = parseExpressionJson(colDef.expression);
+                        if (parsed) {
+                          validateHierarchyJson(parsed, colNameStr);
+                          if (Array.isArray(parsed)) {
+                            hierarchyFieldsList.push(...parsed);
+                          } else {
+                            hierarchyFieldsList.push(parsed);
+                          }
+                        }
+                      } catch (e: any) {
+                        console.warn(e.message);
+                      }
+                    }
+                  });
+                }
+                const seen = new Set<string>();
+                const hierarchyFields = hierarchyFieldsList.filter(item => {
+                  const key = item.fieldName || item.columnName;
+                  if (key && !seen.has(key)) {
+                    seen.add(key);
+                    return true;
+                  }
+                  return false;
+                });
                 return {
                   datasourceColumns: validColumns,
                   allColumns: allColumns,
-                  hierarchyFields: state.controls?.hierarchyFields?.value || [],
+                  hierarchyFields,
                 };
               },
             },

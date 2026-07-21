@@ -84,6 +84,7 @@ export interface DatasourceColumn {
   column_name: string;
   groupby: boolean;
   verbose_name?: string;
+  expression?: string;
 }
 
 export interface DatasourceMetric {
@@ -116,8 +117,8 @@ export type TableChartFormData = QueryFormData & {
   column_config?: Record<string, TableColumnConfig>;
   allow_rearrange_columns?: boolean;
   editableMetrics?: string[];
-  backendApiUrl?: string;
   hierarchyFields?: HierarchyFieldConfig[];
+  hierarchyColumns?: any[];
   chartLevelActions?: ChartLevelActionConfig[];
   rowLevelActions?: RowLevelActionConfig[];
   excludeOptionFilter?: boolean;
@@ -226,8 +227,8 @@ export interface TableChartTransformedProps<D extends DataRecord = DataRecord> {
   datasourceType?: string;
   allColumns?: any[];
   isRefreshing?: boolean;
-  // End Pivot Props
   hierarchyFields?: HierarchyFieldConfig[];
+  hierarchyColumns?: any[];
   chartLevelActions?: ChartLevelActionConfig[];
   rowLevelActions?: RowLevelActionConfig[];
   excludeOptionFilter?: boolean;
@@ -236,6 +237,7 @@ export interface TableChartTransformedProps<D extends DataRecord = DataRecord> {
   globalRedirectionUrls?: RedirectConfig[];
   enableLayout?: boolean;
   htmlViewerActions?: HTMLViewerActionConfig[];
+  validationError?: string;
 }
 
 export interface RedirectConfig {

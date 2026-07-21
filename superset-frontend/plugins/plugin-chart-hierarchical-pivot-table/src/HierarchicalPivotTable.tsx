@@ -28,7 +28,7 @@ const renderIcon = (iconName: string) => {
   const Icon = (AntdIcons as any)[iconName];
   return Icon ? <Icon /> : null;
 };
-import { Button, notification, Spin } from 'antd';
+import { Alert, Button, notification, Spin } from 'antd';
 import {
   AdhocMetric,
   BinaryQueryObjectFilterClause,
@@ -210,6 +210,7 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
     globalRedirectionUrls = [],
     enableLayout,
     htmlViewerActions = [],
+    validationError,
   } = props;
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -220,6 +221,16 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
   // State for columns fetched explicitly from API
   const [fetchedColumns, setFetchedColumns] = useState<DatasourceColumn[]>([]);
   const [fetchedMetrics, setFetchedMetrics] = useState<DatasourceMetric[]>([]);
+
+  useEffect(() => {
+    if (validationError) {
+      notification.error({
+        message: t('Validation Error'),
+        description: validationError,
+        duration: 10,
+      });
+    }
+  }, [validationError]);
 
   const allAvailableMetrics = useMemo(() => {
     const list = [...fetchedMetrics];
@@ -701,6 +712,7 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
               column_name: col.column_name,
               groupby: col.groupby,
               verbose_name: col.verbose_name,
+              expression: col.expression,
             })) || [];
           setFetchedColumns(columns);
           const metrics =
@@ -1279,6 +1291,21 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
       timeGrainSqla,
     ],
   );
+
+  if (validationError) {
+    return (
+      <Styles height={height} width={width} margin={theme.sizeUnit * 4}>
+        <div style={{ padding: 16 }}>
+          <Alert
+            type="error"
+            message={t('Validation Error')}
+            description={validationError}
+            showIcon
+          />
+        </div>
+      </Styles>
+    );
+  }
 
   return (
     <Styles height={height} width={width} margin={theme.sizeUnit * 4}>

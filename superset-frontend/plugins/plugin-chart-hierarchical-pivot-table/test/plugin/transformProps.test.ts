@@ -47,12 +47,33 @@ describe('PivotTableChart transformProps', () => {
     legacy_order_by: 'count',
     order_desc: true,
     currencyFormat: { symbol: 'USD', symbolPosition: 'prefix' },
-    chartLevelActions: [{ buttonLabel: 'Test', apiEndpoint: '/test', buttonIcon: 'CheckOutlined' }],
-    rowLevelActions: [{ buttonLabel: 'Approve', apiEndpoint: '/approve', buttonIcon: 'CheckOutlined', modalTitle: 'Approve Modal' }],
-    hierarchyFields: [{ fieldName: 'name', fieldLabel: 'Name', columnName: 'name', level: 1, parentField: [], filterColumn: [] }],
+    chartLevelActions: [
+      {
+        buttonLabel: 'Test',
+        apiEndpoint: '/test',
+        buttonIcon: 'CheckOutlined',
+      },
+    ],
+    rowLevelActions: [
+      {
+        buttonLabel: 'Approve',
+        apiEndpoint: '/approve',
+        buttonIcon: 'CheckOutlined',
+        modalTitle: 'Approve Modal',
+      },
+    ],
+    hierarchyColumns: ['hierarchy_col'],
     customSortMethod: 'Chronological',
-    redirectionUrls: [{ label: 'Row Redirect', url: 'https://foo.bar', uniqueField: 'name' }],
-    globalRedirectionUrls: [{ label: 'Global Redirect', url: 'https://foo.bar/global', uniqueField: 'name' }],
+    redirectionUrls: [
+      { label: 'Row Redirect', url: 'https://foo.bar', uniqueField: 'name' },
+    ],
+    globalRedirectionUrls: [
+      {
+        label: 'Global Redirect',
+        url: 'https://foo.bar/global',
+        uniqueField: 'name',
+      },
+    ],
   };
   const chartProps = new ChartProps<QueryFormData>({
     formData,
@@ -67,11 +88,31 @@ describe('PivotTableChart transformProps', () => {
     ],
     hooks: { setDataMask },
     filterState: { selectedFilters: {} },
-    datasource: { verboseMap: {}, columnFormats: {} },
+    datasource: {
+      verboseMap: {},
+      columnFormats: {},
+      columns: [
+        {
+          column_name: 'hierarchy_col',
+          groupby: true,
+          expression: JSON.stringify([
+            {
+              fieldName: 'name',
+              fieldLabel: 'Name',
+              columnName: 'name',
+              level: 1,
+              parentField: [],
+              filterColumn: [],
+              hierarchyGroup: 'Item',
+            },
+          ]),
+        },
+      ],
+    },
     theme: supersetTheme,
   });
 
-  it('should transform chart props for viz', () => {
+  test('should transform chart props for viz', () => {
     expect(transformProps(chartProps)).toEqual({
       width: 800,
       height: 600,
@@ -100,9 +141,32 @@ describe('PivotTableChart transformProps', () => {
       columnFormats: {},
       currencyFormats: {},
       currencyFormat: { symbol: 'USD', symbolPosition: 'prefix' },
-      chartLevelActions: [{ buttonLabel: 'Test', apiEndpoint: '/test', buttonIcon: 'CheckOutlined' }],
-      rowLevelActions: [{ buttonLabel: 'Approve', apiEndpoint: '/approve', buttonIcon: 'CheckOutlined', modalTitle: 'Approve Modal' }],
-      hierarchyFields: [{ fieldName: 'name', fieldLabel: 'Name', columnName: 'name', level: 1, parentField: [], filterColumn: [] }],
+      chartLevelActions: [
+        {
+          buttonLabel: 'Test',
+          apiEndpoint: '/test',
+          buttonIcon: 'CheckOutlined',
+        },
+      ],
+      rowLevelActions: [
+        {
+          buttonLabel: 'Approve',
+          apiEndpoint: '/approve',
+          buttonIcon: 'CheckOutlined',
+          modalTitle: 'Approve Modal',
+        },
+      ],
+      hierarchyFields: [
+        {
+          fieldName: 'name',
+          fieldLabel: 'Name',
+          columnName: 'name',
+          level: 1,
+          parentField: [],
+          filterColumn: [],
+          hierarchyGroup: 'Item',
+        },
+      ],
       useCustomSorting: undefined,
       isRefreshing: undefined,
       excludeOptionFilter: undefined,
@@ -115,15 +179,112 @@ describe('PivotTableChart transformProps', () => {
       datasourceType: undefined,
       sliceId: undefined,
       rawFormData: formData,
-      allColumns: undefined,
+      allColumns: [
+        {
+          column_name: 'hierarchy_col',
+          groupby: true,
+          expression: JSON.stringify([
+            {
+              fieldName: 'name',
+              fieldLabel: 'Name',
+              columnName: 'name',
+              level: 1,
+              parentField: [],
+              filterColumn: [],
+              hierarchyGroup: 'Item',
+            },
+          ]),
+        },
+      ],
       allowRenderHtml: undefined,
       cellEditPayloadMapping: undefined,
       colSubTotals: undefined,
       rowSubTotals: undefined,
-      globalRedirectionUrls: [{ label: 'Global Redirect', url: 'https://foo.bar/global', uniqueField: 'name' }],
-      redirectionUrls: [{ label: 'Row Redirect', url: 'https://foo.bar', uniqueField: 'name' }],
+      globalRedirectionUrls: [
+        {
+          label: 'Global Redirect',
+          url: 'https://foo.bar/global',
+          uniqueField: 'name',
+        },
+      ],
+      redirectionUrls: [
+        { label: 'Row Redirect', url: 'https://foo.bar', uniqueField: 'name' },
+      ],
       timeGrainSqla: undefined,
       onContextMenu: undefined,
+      enableLayout: true,
+      htmlViewerActions: undefined,
     });
+  });
+
+  test('should return validationError when selected hierarchy column has invalid expression JSON', () => {
+    const invalidProps = {
+      ...chartProps,
+      datasource: {
+        ...chartProps.datasource,
+        columns: [
+          {
+            column_name: 'hierarchy_col',
+            groupby: true,
+            expression: 'INVALID_JSON_HERE',
+          },
+        ],
+      },
+    };
+    expect(transformProps(invalidProps).validationError).toContain(
+      'Invalid hierarchy configuration on column "hierarchy_col". Please ensure it contains a valid JSON string.',
+    );
+  });
+
+  test('should return validationError when selected hierarchy column has missing required fieldName', () => {
+    const invalidProps = {
+      ...chartProps,
+      datasource: {
+        ...chartProps.datasource,
+        columns: [
+          {
+            column_name: 'hierarchy_col',
+            groupby: true,
+            expression: JSON.stringify([
+              {
+                fieldLabel: 'Name',
+                columnName: 'name',
+                level: 1,
+                hierarchyGroup: 'Item',
+              },
+            ]), // missing fieldName
+          },
+        ],
+      },
+    };
+    expect(transformProps(invalidProps).validationError).toContain(
+      'Invalid hierarchy structure on column "hierarchy_col". Please ensure the JSON configuration includes all required properties (columnName, fieldName, fieldLabel, level, and hierarchyGroup).',
+    );
+  });
+
+  test('should return validationError when selected hierarchy column has missing required hierarchyGroup', () => {
+    const invalidProps = {
+      ...chartProps,
+      datasource: {
+        ...chartProps.datasource,
+        columns: [
+          {
+            column_name: 'hierarchy_col',
+            groupby: true,
+            expression: JSON.stringify([
+              {
+                fieldName: 'name',
+                fieldLabel: 'Name',
+                columnName: 'name',
+                level: 1,
+              },
+            ]), // missing hierarchyGroup
+          },
+        ],
+      },
+    };
+    expect(transformProps(invalidProps).validationError).toContain(
+      'Invalid hierarchy structure on column "hierarchy_col". Please ensure the JSON configuration includes all required properties (columnName, fieldName, fieldLabel, level, and hierarchyGroup).',
+    );
   });
 });

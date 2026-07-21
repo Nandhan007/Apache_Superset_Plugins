@@ -5,7 +5,7 @@ export interface HierarchyFieldConfig {
   columnName: string;
   parentField: string | string[] | null;
   filterColumn: string;
-  hierarchyGroup?: string;
+  hierarchyGroup: string;
   excludeFilter?: boolean;
   isMulti?: boolean;
   sortMethod?: 'Default' | 'Chronological';

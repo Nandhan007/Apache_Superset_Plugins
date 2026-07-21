@@ -61,6 +61,7 @@ export interface DatasourceColumn {
   column_name: string;
   groupby: boolean;
   verbose_name?: string;
+  expression?: string;
 }
 
 export interface DatasourceMetric {
@@ -120,6 +121,7 @@ interface PivotTableCustomizeProps {
   useCustomSorting?: boolean;
   isRefreshing?: boolean;
   hierarchyFields?: HierarchyFieldConfig[];
+  hierarchyColumns?: QueryFormColumn[];
   chartLevelActions?: ChartLevelActionConfig[];
   rowLevelActions?: RowLevelActionConfig[];
   excludeOptionFilter?: boolean;
@@ -129,6 +131,7 @@ interface PivotTableCustomizeProps {
   globalRedirectionUrls?: RedirectConfig[];
   enableLayout?: boolean;
   htmlViewerActions?: HTMLViewerActionConfig[];
+  validationError?: string;
 }
 
 export interface RedirectConfig {

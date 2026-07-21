@@ -19,6 +19,7 @@
 import {
   ChartProps,
   DataRecord,
+  ensureIsArray,
   extractTimegrain,
   getTimeFormatter,
   getTimeFormatterForGranularity,
@@ -29,8 +30,65 @@ import {
 import { GenericDataType } from '@apache-superset/core/common';
 import { getColorFormatters } from '@superset-ui/chart-controls';
 import { DateFormatter } from '../types';
+import { HierarchyFieldConfig } from '../types/hierarchy';
 
 const { DATABASE_DATETIME } = TimeFormats;
+
+function parseExpressionJson(expression: string): any {
+  if (!expression) return null;
+  const cleanExpr = expression.trim();
+
+  const firstArray = cleanExpr.indexOf('[');
+  const firstObject = cleanExpr.indexOf('{');
+  const lastArray = cleanExpr.lastIndexOf(']');
+  const lastObject = cleanExpr.lastIndexOf('}');
+
+  let startIdx = -1;
+  let endIdx = -1;
+
+  if (firstArray !== -1 && (firstObject === -1 || firstArray < firstObject)) {
+    startIdx = firstArray;
+    endIdx = lastArray;
+  } else if (firstObject !== -1) {
+    startIdx = firstObject;
+    endIdx = lastObject;
+  }
+
+  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+    return null;
+  }
+
+  let jsonCandidate = cleanExpr.slice(startIdx, endIdx + 1);
+
+  if (jsonCandidate.includes("''")) {
+    jsonCandidate = jsonCandidate.replace(/''/g, "'");
+  }
+  if (jsonCandidate.includes('\\"')) {
+    jsonCandidate = jsonCandidate.replace(/\\"/g, '"');
+  }
+  if (jsonCandidate.includes("\\'")) {
+    jsonCandidate = jsonCandidate.replace(/\\'/g, "'");
+  }
+
+  if (jsonCandidate.startsWith('{') && jsonCandidate.endsWith('}')) {
+    const inner = jsonCandidate.slice(1, -1).trim();
+    if (inner.startsWith('{') && inner.endsWith('}')) {
+      jsonCandidate = `[${inner}]`;
+    }
+  }
+
+  try {
+    return JSON.parse(jsonCandidate);
+  } catch (e) {
+    try {
+      const doubleQuoteJson = jsonCandidate.replace(/'/g, '"');
+      return JSON.parse(doubleQuoteJson);
+    } catch (_e2) {
+      console.error('Failed to parse expression JSON:', expression, e);
+      return null;
+    }
+  }
+}
 
 function isNumeric(key: string, data: DataRecord[] = []) {
   return data.every(
@@ -117,7 +175,7 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     backendApiUrl,
     editableMetrics,
     useCustomSorting,
-    hierarchyFields,
+    hierarchyColumns,
     chartLevelActions,
     rowLevelActions,
     excludeOptionFilter,
@@ -125,8 +183,101 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     globalRedirectionUrls,
     htmlViewerActions,
   } = formData;
+
   const { selectedFilters } = filterState;
   const granularity = extractTimegrain(rawFormData);
+
+  const selectedHierarchyColumns = ensureIsArray(hierarchyColumns);
+  const datasourceColumns = (chartProps.datasource as any)?.columns || [];
+  const hierarchyFieldsList: HierarchyFieldConfig[] = [];
+
+  function validateHierarchyJson(parsed: any, colName: string): void {
+    if (parsed === null || parsed === undefined) {
+      throw new Error(
+        `Invalid hierarchy configuration on column "${colName}". Please ensure it contains a valid JSON string.`,
+      );
+    }
+    const items = Array.isArray(parsed) ? parsed : [parsed];
+    if (items.length === 0) {
+      throw new Error(
+        `The hierarchy configuration on column "${colName}" is empty.`,
+      );
+    }
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i];
+      if (
+        typeof item !== 'object' ||
+        item === null ||
+        typeof item.columnName !== 'string' ||
+        !item.columnName.trim() ||
+        typeof item.fieldName !== 'string' ||
+        !item.fieldName.trim() ||
+        typeof item.fieldLabel !== 'string' ||
+        !item.fieldLabel.trim() ||
+        typeof item.level !== 'number' ||
+        Number.isNaN(item.level) ||
+        typeof item.hierarchyGroup !== 'string' ||
+        !item.hierarchyGroup.trim()
+      ) {
+        throw new Error(
+          `Invalid hierarchy structure on column "${colName}". Please ensure the JSON configuration includes all required properties (columnName, fieldName, fieldLabel, level, and hierarchyGroup).`,
+        );
+      }
+    }
+  }
+
+  const validationErrors: string[] = [];
+
+  selectedHierarchyColumns.forEach((colName: any) => {
+    const colNameStr =
+      typeof colName === 'object' && colName !== null
+        ? (colName as any).column_name || (colName as any).label
+        : colName;
+
+    if (!colNameStr) {
+      validationErrors.push('Selected hierarchy column is invalid.');
+      return;
+    }
+
+    const colDef = datasourceColumns.find(
+      (c: any) => c.column_name === colNameStr,
+    );
+    if (!colDef) {
+      validationErrors.push(
+        `Column "${colNameStr}" selected for hierarchy config was not found in dataset columns metadata.`,
+      );
+      return;
+    }
+    if (!colDef.expression) {
+      validationErrors.push(
+        `Column "${colNameStr}" selected for hierarchy config is not a calculated column (has no SQL expression or JSON string).`,
+      );
+      return;
+    }
+    const parsed = parseExpressionJson(colDef.expression);
+    try {
+      validateHierarchyJson(parsed, colNameStr);
+      if (parsed) {
+        if (Array.isArray(parsed)) {
+          hierarchyFieldsList.push(...parsed);
+        } else {
+          hierarchyFieldsList.push(parsed);
+        }
+      }
+    } catch (e: any) {
+      validationErrors.push(e.message);
+    }
+  });
+
+  const seen = new Set<string>();
+  const hierarchyFields = hierarchyFieldsList.filter(item => {
+    const key = item.fieldName || item.columnName;
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      return true;
+    }
+    return false;
+  });
 
   const dateFormatters = colnames
     .filter(
@@ -208,11 +359,16 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     rawFormData: chartProps.rawFormData,
     allColumns: (
       chartProps.datasource as {
-        columns?: { column_name: string; groupby?: boolean }[];
+        columns?: {
+          column_name: string;
+          groupby?: boolean;
+          expression?: string;
+        }[];
       }
     )?.columns?.map(col => ({
       column_name: col.column_name,
       groupby: !!col.groupby,
+      expression: col.expression,
     })),
     useCustomSorting,
     isRefreshing,
@@ -225,5 +381,7 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     globalRedirectionUrls,
     enableLayout: formData.enableLayout !== false,
     htmlViewerActions,
+    validationError:
+      validationErrors.length > 0 ? validationErrors.join(' | ') : undefined,
   };
 }
