@@ -90,6 +90,66 @@ function parseExpressionJson(expression: string): any {
   }
 }
 
+function findColumnExpression(
+  allColumns: any[],
+  colName: any,
+  formData?: any,
+): string | undefined {
+  if (!colName) return undefined;
+
+  if (typeof colName === 'object' && colName !== null) {
+    const expr =
+      colName.expression ||
+      colName.sqlExpression ||
+      colName.sql_expression ||
+      colName.sql;
+    if (expr) return expr;
+  }
+
+  const colNameStr =
+    typeof colName === 'object' && colName !== null
+      ? colName.column_name || colName.label || colName.columnName
+      : String(colName);
+
+  if (!colNameStr) return undefined;
+
+  const defs = formData?.hierarchyColumnDefs || {};
+  for (const key of Object.keys(defs)) {
+    if (key.toLowerCase() === colNameStr.toLowerCase() && defs[key]) {
+      return defs[key];
+    }
+  }
+
+  if (Array.isArray(allColumns)) {
+    const target = colNameStr.toLowerCase().trim();
+    const found = allColumns.find((c: any) => {
+      if (!c) return false;
+      const cName = String(c.column_name || '').toLowerCase().trim();
+      const cLabel = String(c.label || '').toLowerCase().trim();
+      const cVerbose = String(c.verbose_name || '').toLowerCase().trim();
+      return cName === target || cLabel === target || cVerbose === target;
+    });
+
+    if (found) {
+      const expr =
+        found.expression ||
+        found.sqlExpression ||
+        found.sql_expression ||
+        found.sql;
+      if (expr) return expr;
+    }
+  }
+
+  if (
+    typeof colNameStr === 'string' &&
+    (colNameStr.trim().startsWith('[') || colNameStr.trim().startsWith('{'))
+  ) {
+    return colNameStr;
+  }
+
+  return undefined;
+}
+
 function isNumeric(key: string, data: DataRecord[] = []) {
   return data.every(
     record =>
@@ -229,43 +289,55 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
   const validationErrors: string[] = [];
 
   selectedHierarchyColumns.forEach((colName: any) => {
-    const colNameStr =
+    let colNameStr =
       typeof colName === 'object' && colName !== null
-        ? (colName as any).column_name || (colName as any).label
-        : colName;
+        ? colName.column_name || colName.label || colName.columnName
+        : String(colName);
 
-    if (!colNameStr) {
-      validationErrors.push('Selected hierarchy column is invalid.');
-      return;
+    let parsed: any = null;
+
+    if (
+      typeof colName === 'object' &&
+      colName !== null &&
+      (Array.isArray(colName) || (colName as any).columnName)
+    ) {
+      parsed = colName;
+      colNameStr = (colName as any).columnName || 'hierarchical_config';
+    } else {
+      const expression = findColumnExpression(
+        datasourceColumns,
+        colName,
+        formData,
+      );
+
+      if (!expression) {
+        console.warn(
+          `Column "${colNameStr}" selected for hierarchy config was not found in dataset columns metadata or form_data.`,
+        );
+        return;
+      }
+      parsed = parseExpressionJson(expression);
     }
 
-    const colDef = datasourceColumns.find(
-      (c: any) => c.column_name === colNameStr,
-    );
-    if (!colDef) {
-      validationErrors.push(
-        `Column "${colNameStr}" selected for hierarchy config was not found in dataset columns metadata.`,
+    if (!parsed) {
+      console.warn(
+        `Could not parse JSON for hierarchy column "${colNameStr}".`,
       );
       return;
     }
-    if (!colDef.expression) {
-      validationErrors.push(
-        `Column "${colNameStr}" selected for hierarchy config is not a calculated column (has no SQL expression or JSON string).`,
-      );
-      return;
-    }
-    const parsed = parseExpressionJson(colDef.expression);
+
     try {
-      validateHierarchyJson(parsed, colNameStr);
-      if (parsed) {
-        if (Array.isArray(parsed)) {
-          hierarchyFieldsList.push(...parsed);
-        } else {
-          hierarchyFieldsList.push(parsed);
-        }
+      validateHierarchyJson(parsed, String(colNameStr));
+      if (Array.isArray(parsed)) {
+        hierarchyFieldsList.push(...parsed);
+      } else {
+        hierarchyFieldsList.push(parsed);
       }
     } catch (e: any) {
-      validationErrors.push(e.message);
+      console.warn(
+        `Hierarchy validation warning for "${colNameStr}":`,
+        e.message,
+      );
     }
   });
 
@@ -277,6 +349,59 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
       return true;
     }
     return false;
+  });
+
+  const allActions = [
+    ...(chartLevelActions || []),
+    ...(rowLevelActions || []),
+  ];
+
+  allActions.forEach((action: any) => {
+    if (!action) return;
+
+    const fieldGroups: string[][] = [];
+
+    if (
+      Array.isArray(action.hierarchyFields) &&
+      action.hierarchyFields.length > 0
+    ) {
+      fieldGroups.push(action.hierarchyFields);
+    }
+
+    if (Array.isArray(action.additionalFields)) {
+      action.additionalFields.forEach((f: any) => {
+        if (f && f.type === 'hierarchy' && f.name) {
+          const names = Array.isArray(f.name) ? f.name : [f.name];
+          if (names.length > 0) {
+            fieldGroups.push(names);
+          }
+        }
+      });
+    }
+
+    fieldGroups.forEach(group => {
+      let prevFieldName: string | null = null;
+      group.forEach((fName, idx) => {
+        if (fName && !seen.has(fName)) {
+          seen.add(fName);
+          hierarchyFields.push({
+            level: idx + 1,
+            fieldName: fName,
+            fieldLabel: fName,
+            columnName: fName,
+            parentField: prevFieldName,
+            filterColumn: fName,
+            hierarchyGroup: 'ActionHierarchy',
+          } as any);
+        }
+        if (fName) {
+          const existing = hierarchyFields.find(
+            h => h.fieldName === fName || h.columnName === fName,
+          );
+          prevFieldName = existing ? existing.fieldName : fName;
+        }
+      });
+    });
   });
 
   const dateFormatters = colnames

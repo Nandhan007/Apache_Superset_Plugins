@@ -269,8 +269,93 @@ const config: ControlPanelConfig = {
                 'Select column(s) containing JSON configuration for hierarchy',
               ),
               renderTrigger: true,
-              rerender: ['chartLevelActions', 'rowLevelActions'],
+              rerender: ['chartLevelActions', 'rowLevelActions', 'hierarchyColumnDefs'],
               default: [],
+              mapStateToProps: (state: ControlPanelState, controlState: any) => {
+                const props = sharedControls.groupby.mapStateToProps
+                  ? sharedControls.groupby.mapStateToProps(state, controlState)
+                  : {};
+                const datasource =
+                  (state.datasource as Dataset) ||
+                  (state as any).explore?.datasource;
+                const allColumns = datasource?.columns || [];
+                const value = controlState?.value || state.controls?.hierarchyColumns?.value || [];
+                if (Array.isArray(value) && Array.isArray(allColumns) && allColumns.length > 0) {
+                  const enrichedValue = value.map((colItem: any) => {
+                    const colNameStr =
+                      typeof colItem === 'object' && colItem !== null
+                        ? colItem.column_name || colItem.label
+                        : colItem;
+                    const colDef = allColumns.find(
+                      (c: any) =>
+                        c.column_name === colNameStr ||
+                        c.label === colNameStr ||
+                        c.verbose_name === colNameStr,
+                    );
+                    if (colDef && colDef.expression) {
+                      if (typeof colItem === 'object' && colItem !== null) {
+                        return { ...colItem, expression: colDef.expression };
+                      }
+                      return {
+                        column_name: colNameStr,
+                        label: colNameStr,
+                        expression: colDef.expression,
+                      };
+                    }
+                    return colItem;
+                  });
+                  return {
+                    ...props,
+                    value: enrichedValue,
+                  };
+                }
+                return props;
+              },
+            },
+          },
+        ],
+        [
+          {
+            name: 'hierarchyColumnDefs',
+            config: {
+              type: 'HiddenControl',
+              renderTrigger: true,
+              default: {},
+              mapStateToProps: (state: ControlPanelState) => {
+                const datasource =
+                  (state.datasource as Dataset) ||
+                  (state as any).explore?.datasource;
+                const allColumns = datasource?.columns || [];
+                const hierarchyColumns =
+                  state.controls?.hierarchyColumns?.value || [];
+                const hierarchyColumnDefs: Record<string, string> = {};
+                if (Array.isArray(allColumns) && Array.isArray(hierarchyColumns)) {
+                  hierarchyColumns.forEach((colName: any) => {
+                    const colNameStr =
+                      typeof colName === 'object' && colName !== null
+                        ? (colName as any).column_name || (colName as any).label
+                        : colName;
+                    const colDef = allColumns.find(
+                      (c: any) =>
+                        c.column_name === colNameStr ||
+                        c.label === colNameStr ||
+                        c.verbose_name === colNameStr,
+                    );
+                    if (colDef && colDef.expression) {
+                      hierarchyColumnDefs[colNameStr] = colDef.expression;
+                    } else if (
+                      typeof colName === 'object' &&
+                      colName !== null &&
+                      (colName as any).expression
+                    ) {
+                      hierarchyColumnDefs[colNameStr] = (colName as any).expression;
+                    }
+                  });
+                }
+                return {
+                  value: hierarchyColumnDefs,
+                };
+              },
             },
           },
         ],
@@ -306,11 +391,31 @@ const config: ControlPanelConfig = {
                         ? (colName as any).column_name || (colName as any).label
                         : colName;
                     const colDef = allColumns.find(
-                      (c: any) => c.column_name === colNameStr,
+                      (c: any) =>
+                        c.column_name === colNameStr ||
+                        c.label === colNameStr ||
+                        c.verbose_name === colNameStr,
                     );
-                    if (colDef && colDef.expression) {
+                    let expression = colDef?.expression;
+                    if (
+                      !expression &&
+                      (state.form_data as any)?.hierarchyColumnDefs?.[colNameStr]
+                    ) {
+                      expression = (state.form_data as any).hierarchyColumnDefs[
+                        colNameStr
+                      ];
+                    }
+                    if (
+                      !expression &&
+                      typeof colName === 'object' &&
+                      colName !== null &&
+                      (colName as any).expression
+                    ) {
+                      expression = (colName as any).expression;
+                    }
+                    if (expression) {
                       try {
-                        const parsed = parseExpressionJson(colDef.expression);
+                        const parsed = parseExpressionJson(expression);
                         if (parsed) {
                           validateHierarchyJson(parsed, colNameStr);
                           if (Array.isArray(parsed)) {
@@ -375,11 +480,31 @@ const config: ControlPanelConfig = {
                         ? (colName as any).column_name || (colName as any).label
                         : colName;
                     const colDef = allColumns.find(
-                      (c: any) => c.column_name === colNameStr,
+                      (c: any) =>
+                        c.column_name === colNameStr ||
+                        c.label === colNameStr ||
+                        c.verbose_name === colNameStr,
                     );
-                    if (colDef && colDef.expression) {
+                    let expression = colDef?.expression;
+                    if (
+                      !expression &&
+                      (state.form_data as any)?.hierarchyColumnDefs?.[colNameStr]
+                    ) {
+                      expression = (state.form_data as any).hierarchyColumnDefs[
+                        colNameStr
+                      ];
+                    }
+                    if (
+                      !expression &&
+                      typeof colName === 'object' &&
+                      colName !== null &&
+                      (colName as any).expression
+                    ) {
+                      expression = (colName as any).expression;
+                    }
+                    if (expression) {
                       try {
-                        const parsed = parseExpressionJson(colDef.expression);
+                        const parsed = parseExpressionJson(expression);
                         if (parsed) {
                           validateHierarchyJson(parsed, colNameStr);
                           if (Array.isArray(parsed)) {
@@ -926,6 +1051,32 @@ const config: ControlPanelConfig = {
     },
   ],
   formDataOverrides: formData => {
+    const hierarchyColumnDefs: Record<string, string> =
+      formData.hierarchyColumnDefs || {};
+
+    const hierarchyColumns = ensureIsArray(formData.hierarchyColumns).map(
+      (col: any) => {
+        if (typeof col === 'object' && col !== null) {
+          const colNameStr = col.column_name || col.label || col.columnName;
+          const expr =
+            col.expression ||
+            col.sqlExpression ||
+            col.sql_expression ||
+            col.sql ||
+            hierarchyColumnDefs[colNameStr];
+          if (colNameStr && expr) {
+            hierarchyColumnDefs[colNameStr] = expr;
+            return {
+              column_name: colNameStr,
+              label: colNameStr,
+              expression: expr,
+            };
+          }
+        }
+        return col;
+      },
+    );
+
     const groupbyColumns = getStandardizedControls().controls.columns.filter(
       col => !ensureIsArray(formData.groupbyRows).includes(col),
     );
@@ -933,10 +1084,13 @@ const config: ControlPanelConfig = {
       getStandardizedControls().controls.columns.filter(
         col => !groupbyColumns.includes(col),
       );
+
     return {
       ...formData,
       metrics: getStandardizedControls().popAllMetrics(),
       groupbyColumns,
+      hierarchyColumns,
+      hierarchyColumnDefs,
     };
   },
 };
