@@ -442,7 +442,10 @@ export const TableRenderer = React.memo(props => {
 
   const hasRowActions =
     (tableOptions.rowLevelActions && tableOptions.rowLevelActions.length > 0) ||
-    (tableOptions.htmlViewerActions && tableOptions.htmlViewerActions.length > 0);
+    (tableOptions.htmlViewerActions &&
+      tableOptions.htmlViewerActions.some(
+        action => !action.isGlobalCustomView && action.onlySelectedRow,
+      ));
 
   const [collapsedRows, setCollapsedRows] = useState({});
   const [collapsedCols, setCollapsedCols] = useState({});

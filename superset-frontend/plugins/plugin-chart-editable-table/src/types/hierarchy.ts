@@ -63,6 +63,7 @@ export interface HTMLViewerActionConfig {
   handlebarsTemplate: string;
   styleTemplate?: string;
   onlySelectedRow?: boolean;
+  isGlobalCustomView?: boolean;
   uniqueField?: string;
 }
 export interface SupersetDataFormProps {

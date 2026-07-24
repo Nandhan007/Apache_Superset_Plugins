@@ -378,7 +378,9 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
     rowData?: Record<string, any>,
   ) => {
     let actionRowData: Record<string, any> | undefined = rowData;
-    if (!rowData) {
+    if (action.isGlobalCustomView) {
+      actionRowData = {};
+    } else if (!rowData) {
       if (selectedRowData.size > 0) {
         const allRows = Array.from(selectedRowData.values());
         const aggregatedData: Record<string, any> = {};
@@ -1405,9 +1407,11 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
                     `${currentHtmlAction.handlebarsTemplate}\n<style>${currentHtmlAction.styleTemplate || ''}</style>`,
                   );
                   const templateContext = {
-                    data: currentHtmlAction.onlySelectedRow
-                      ? Array.from(selectedRowData.values())
-                      : props.data || [],
+                    data: currentHtmlAction.isGlobalCustomView
+                      ? []
+                      : currentHtmlAction.onlySelectedRow
+                        ? Array.from(selectedRowData.values())
+                        : props.data || [],
                   };
                   const compiledHtml = template(templateContext);
                   return (
@@ -1468,7 +1472,7 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
                   size="small"
                   icon={renderIcon(action.buttonIcon)}
                   onClick={() => handleHtmlActionClick(action)}
-                  disabled={selectedRowData.size === 0}
+                  disabled={!action.isGlobalCustomView && selectedRowData.size === 0}
                 >
                   {action.buttonLabel}
                 </Button>

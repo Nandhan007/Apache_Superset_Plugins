@@ -837,7 +837,9 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
     rowData?: Record<string, any>,
   ) => {
     let actionRowData: Record<string, any> | undefined = rowData;
-    if (!rowData) {
+    if (action.isGlobalCustomView) {
+      actionRowData = {};
+    } else if (!rowData) {
       if (selectedRowData.size > 0) {
         const allRows = Array.from(selectedRowData.values());
         const aggregatedData: Record<string, any> = {};
@@ -2351,7 +2353,7 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
       Cell: ({ row }: any) => {
         const groupby = [...(groupbyRows || [])];
         const htmlUniqueFields = (htmlViewerActions || [])
-          .filter(action => action.onlySelectedRow)
+          .filter(action => !action.isGlobalCustomView && action.onlySelectedRow)
           .map(action => action.uniqueField)
           .filter((field): field is string => !!field);
 
@@ -2469,7 +2471,10 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
     }
     const hasRowLevelActions = rowLevelActions && rowLevelActions.length > 0;
     const hasHtmlViewerRowSelection =
-      htmlViewerActions && htmlViewerActions.length > 0;
+      htmlViewerActions &&
+      htmlViewerActions.some(
+        action => !action.isGlobalCustomView && action.onlySelectedRow,
+      );
     if (hasRowLevelActions || hasHtmlViewerRowSelection) {
       colsList.unshift(checkboxColumn as any);
     }
@@ -2641,7 +2646,7 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
               size="small"
               icon={renderIcon(action.buttonIcon)}
               onClick={() => handleHtmlActionClick(action)}
-              disabled={selectedRowData.size === 0}
+              disabled={!action.isGlobalCustomView && selectedRowData.size === 0}
             >
               {action.buttonLabel}
             </Button>
@@ -2877,9 +2882,11 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
                     `${currentHtmlAction.handlebarsTemplate}\n<style>${currentHtmlAction.styleTemplate || ''}</style>`,
                   );
                   const templateContext = {
-                    data: currentHtmlAction.onlySelectedRow
-                      ? Array.from(selectedRowData.values())
-                      : props.data || [],
+                    data: currentHtmlAction.isGlobalCustomView
+                      ? []
+                      : currentHtmlAction.onlySelectedRow
+                        ? Array.from(selectedRowData.values())
+                        : props.data || [],
                   };
                   const compiledHtml = template(templateContext);
                   return (

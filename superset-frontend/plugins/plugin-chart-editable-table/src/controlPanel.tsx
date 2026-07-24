@@ -699,37 +699,99 @@ const config: ControlPanelConfig = {
                   (state.datasource as Dataset) ||
                   (state as any).explore?.datasource;
                 const allColumns = datasource?.columns || [];
-                const value = controlState?.value || state.controls?.hierarchyColumns?.value || [];
-                if (Array.isArray(value) && Array.isArray(allColumns) && allColumns.length > 0) {
-                  const enrichedValue = value.map((colItem: any) => {
+                const value =
+                  controlState?.value ||
+                  state.controls?.hierarchyColumns?.value ||
+                  [];
+
+                // Filter options to ONLY include calculated columns (columns with an expression)
+                // Omit expression property from option objects so ColumnSelectPopover populates simpleColumns (Simple tab)
+                const calculatedColumns = allColumns
+                  .filter((c: any) => {
+                    if (!c) return false;
+                    const expr =
+                      c.expression || c.sqlExpression || c.sql_expression || c.sql;
+                    return Boolean(
+                      expr && typeof expr === 'string' && expr.trim().length > 0,
+                    );
+                  })
+                  .map((c: any) => ({
+                    column_name: c.column_name,
+                    verbose_name: c.verbose_name || c.label || c.column_name,
+                    label: c.verbose_name || c.label || c.column_name,
+                    type: c.type || 'STRING',
+                    type_generic: c.type_generic,
+                    groupby: true,
+                  }));
+
+                const seenNames = new Set<string>();
+                const uniqueValueList = (Array.isArray(value) ? value : []).filter(
+                  (colItem: any) => {
                     const colNameStr =
                       typeof colItem === 'object' && colItem !== null
-                        ? colItem.column_name || colItem.label
-                        : colItem;
-                    const colDef = allColumns.find(
-                      (c: any) =>
-                        c.column_name === colNameStr ||
-                        c.label === colNameStr ||
-                        c.verbose_name === colNameStr,
-                    );
-                    if (colDef && colDef.expression) {
-                      if (typeof colItem === 'object' && colItem !== null) {
-                        return { ...colItem, expression: colDef.expression };
-                      }
-                      return {
-                        column_name: colNameStr,
-                        label: colNameStr,
-                        expression: colDef.expression,
-                      };
+                        ? colItem.column_name || colItem.label || colItem.columnName
+                        : String(colItem);
+                    if (!colNameStr || seenNames.has(colNameStr)) {
+                      return false;
                     }
-                    return colItem;
-                  });
-                  return {
-                    ...props,
-                    value: enrichedValue,
-                  };
-                }
-                return props;
+                    seenNames.add(colNameStr);
+                    return true;
+                  },
+                );
+
+                const enrichedValue =
+                  uniqueValueList.length > 0 &&
+                  Array.isArray(allColumns) &&
+                  allColumns.length > 0
+                    ? uniqueValueList.map((colItem: any) => {
+                        const colNameStr =
+                          typeof colItem === 'object' && colItem !== null
+                            ? colItem.column_name || colItem.label
+                            : colItem;
+                        const colDef = allColumns.find(
+                          (c: any) =>
+                            c.column_name === colNameStr ||
+                            c.label === colNameStr ||
+                            c.verbose_name === colNameStr,
+                        );
+                        if (colDef) {
+                          const expr =
+                            colDef.expression ||
+                            colDef.sqlExpression ||
+                            colDef.sql_expression ||
+                            colDef.sql;
+                          if (expr) {
+                            if (typeof colItem === 'object' && colItem !== null) {
+                              return {
+                                ...colDef,
+                                ...colItem,
+                                column_name: colNameStr,
+                                label: colDef.verbose_name || colDef.label || colNameStr,
+                                expression: expr,
+                                groupby: true,
+                              };
+                            }
+                            return {
+                              ...colDef,
+                              column_name: colNameStr,
+                              label: colDef.verbose_name || colDef.label || colNameStr,
+                              expression: expr,
+                              groupby: true,
+                            };
+                          }
+                        }
+                        if (typeof colItem === 'object' && colItem !== null) {
+                          return { ...colItem, groupby: true };
+                        }
+                        return { column_name: colNameStr, label: colNameStr, groupby: true };
+                      })
+                    : uniqueValueList;
+
+                return {
+                  ...props,
+                  options: calculatedColumns,
+                  value: enrichedValue,
+                };
               },
             },
           },
@@ -1395,28 +1457,38 @@ const config: ControlPanelConfig = {
     const hierarchyColumnDefs: Record<string, string> =
       formData.hierarchyColumnDefs || {};
 
-    const hierarchyColumns = ensureIsArray(formData.hierarchyColumns).map(
-      (col: any) => {
-        if (typeof col === 'object' && col !== null) {
-          const colNameStr = col.column_name || col.label || col.columnName;
-          const expr =
-            col.expression ||
-            col.sqlExpression ||
-            col.sql_expression ||
-            col.sql ||
-            hierarchyColumnDefs[colNameStr];
-          if (colNameStr && expr) {
-            hierarchyColumnDefs[colNameStr] = expr;
-            return {
-              column_name: colNameStr,
-              label: colNameStr,
-              expression: expr,
-            };
-          }
+    const seenNames = new Set<string>();
+    const hierarchyColumns: any[] = [];
+
+    ensureIsArray(formData.hierarchyColumns).forEach((col: any) => {
+      const colNameStr =
+        typeof col === 'object' && col !== null
+          ? col.column_name || col.label || col.columnName
+          : String(col);
+
+      if (!colNameStr || seenNames.has(colNameStr)) return;
+      seenNames.add(colNameStr);
+
+      if (typeof col === 'object' && col !== null) {
+        const expr =
+          col.expression ||
+          col.sqlExpression ||
+          col.sql_expression ||
+          col.sql ||
+          hierarchyColumnDefs[colNameStr];
+        if (expr) {
+          hierarchyColumnDefs[colNameStr] = expr;
+          hierarchyColumns.push({
+            ...col,
+            column_name: colNameStr,
+            label: col.label || colNameStr,
+            expression: expr,
+          });
+          return;
         }
-        return col;
-      },
-    );
+      }
+      hierarchyColumns.push(col);
+    });
 
     return {
       ...formData,

@@ -216,7 +216,7 @@ export default function RowLevelActionsControl({
           </Form.Item>
           <Form.Item
             name="buttonIcon"
-            label={t('Icon Name (AntDesign)')}
+            label={t('Icon Name')}
             rules={[{ required: true }]}
           >
             <Select

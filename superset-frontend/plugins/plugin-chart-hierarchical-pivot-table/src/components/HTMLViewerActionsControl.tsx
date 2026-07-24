@@ -149,14 +149,14 @@ export default function HTMLViewerActionsControl({
         style={{ width: '100%', marginTop: 8 }}
         icon={<PlusOutlined />}
       >
-        {t('Add HTML Viewer Button')}
+        {t('Add Custom View Button')}
       </Button>
 
       <Modal
         title={
           editingIndex !== null
-            ? t('Edit HTML Viewer Action')
-            : t('Add HTML Viewer Action')
+            ? t('Edit Custom View Action')
+            : t('Add Custom View Action')
         }
         open={isModalVisible}
         onOk={handleOk}
@@ -167,13 +167,13 @@ export default function HTMLViewerActionsControl({
           <Form.Item
             name="buttonLabel"
             label={t('Button Label')}
-            rules={[{ required: true }]}
+            rules={[{ required: false }]}
           >
             <Input placeholder="e.g. View Details" />
           </Form.Item>
           <Form.Item
             name="buttonIcon"
-            label={t('Icon Name (AntDesign)')}
+            label={t('Icon Name')}
             rules={[{ required: true }]}
           >
             <Select
@@ -196,31 +196,46 @@ export default function HTMLViewerActionsControl({
           </Form.Item>
 
           <Form.Item
-            name="onlySelectedRow"
+            name="isGlobalCustomView"
             valuePropName="checked"
           >
-            <Checkbox>{t('Enable Row-Level Context')}</Checkbox>
+            <Checkbox>{t('Enable Global Custom View')}</Checkbox>
           </Form.Item>
 
-          <Form.Item noStyle dependencies={['onlySelectedRow']}>
+          <Form.Item noStyle dependencies={['isGlobalCustomView']}>
             {({ getFieldValue }) =>
-              getFieldValue('onlySelectedRow') ? (
-                <Form.Item
-                  name="uniqueField"
-                  label={t('Unique Column')}
-                  rules={[{ required: true }]}
-                >
-                  <Select
-                    showSearch
-                    placeholder="Select unique field"
-                    options={columnOptions}
-                    filterOption={(input, option) =>
-                      (option?.value as string)
-                        .toLowerCase()
-                        .includes(input.toLowerCase())
+              !getFieldValue('isGlobalCustomView') ? (
+                <>
+                  <Form.Item
+                    name="onlySelectedRow"
+                    valuePropName="checked"
+                  >
+                    <Checkbox>{t('Enable Row-Level Context')}</Checkbox>
+                  </Form.Item>
+
+                  <Form.Item noStyle dependencies={['onlySelectedRow']}>
+                    {({ getFieldValue: getChildValue }) =>
+                      getChildValue('onlySelectedRow') ? (
+                        <Form.Item
+                          name="uniqueField"
+                          label={t('Unique Column')}
+                          rules={[{ required: true }]}
+                        >
+                          <Select
+                            showSearch
+                            placeholder="Select unique field"
+                            options={columnOptions}
+                            filterOption={(input, option) =>
+                              (option?.value as string)
+                                .toLowerCase()
+                                .includes(input.toLowerCase())
+                            }
+                          />
+                        </Form.Item>
+                      ) : null
                     }
-                  />
-                </Form.Item>
+                  </Form.Item>
+                </>
               ) : null
             }
           </Form.Item>
