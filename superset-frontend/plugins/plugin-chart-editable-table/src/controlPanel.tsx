@@ -686,7 +686,7 @@ const config: ControlPanelConfig = {
               ...sharedControls.groupby,
               label: t('Hierarchy Columns'),
               description: t(
-                'Select column(s) containing JSON configuration for hierarchy',
+                'Select hierarchy columns',
               ),
               renderTrigger: true,
               rerender: ['chartLevelActions', 'rowLevelActions', 'hierarchyColumnDefs'],
@@ -704,6 +704,38 @@ const config: ControlPanelConfig = {
                   state.controls?.hierarchyColumns?.value ||
                   [];
 
+                const extractColumnName = (colItem: any): string => {
+                  if (!colItem) return '';
+                  if (typeof colItem === 'string') return colItem.trim();
+                  if (typeof colItem === 'object' && colItem !== null) {
+                    return String(
+                      colItem.column_name ||
+                        colItem.optionName ||
+                        colItem.label ||
+                        colItem.columnName ||
+                        colItem.sqlExpression ||
+                        '',
+                    ).trim();
+                  }
+                  return String(colItem).trim();
+                };
+
+                const findColDef = (allCols: any[], name: string) => {
+                  if (!name || !Array.isArray(allCols)) return undefined;
+                  const target = name.toLowerCase().trim();
+                  return allCols.find((c: any) => {
+                    if (!c) return false;
+                    const cName = String(c.column_name || '').toLowerCase().trim();
+                    const cLabel = String(c.label || '').toLowerCase().trim();
+                    const cVerbose = String(c.verbose_name || '').toLowerCase().trim();
+                    return (
+                      (cName && cName === target) ||
+                      (cLabel && cLabel === target) ||
+                      (cVerbose && cVerbose === target)
+                    );
+                  });
+                };
+
                 // Filter options to ONLY include calculated columns (columns with an expression)
                 // Omit expression property from option objects so ColumnSelectPopover populates simpleColumns (Simple tab)
                 const calculatedColumns = allColumns
@@ -715,26 +747,30 @@ const config: ControlPanelConfig = {
                       expr && typeof expr === 'string' && expr.trim().length > 0,
                     );
                   })
-                  .map((c: any) => ({
-                    column_name: c.column_name,
-                    verbose_name: c.verbose_name || c.label || c.column_name,
-                    label: c.verbose_name || c.label || c.column_name,
-                    type: c.type || 'STRING',
-                    type_generic: c.type_generic,
-                    groupby: true,
-                  }));
+                  .map((c: any) => {
+                    const colNameStr = extractColumnName(c);
+                    const colLabel = c.verbose_name || c.label || colNameStr;
+                    return {
+                      ...c,
+                      column_name: colNameStr,
+                      optionName: colNameStr,
+                      verbose_name: colLabel,
+                      label: colLabel,
+                      type: c.type || 'STRING',
+                      type_generic: c.type_generic,
+                      groupby: true,
+                      expression: undefined,
+                    };
+                  });
 
                 const seenNames = new Set<string>();
                 const uniqueValueList = (Array.isArray(value) ? value : []).filter(
                   (colItem: any) => {
-                    const colNameStr =
-                      typeof colItem === 'object' && colItem !== null
-                        ? colItem.column_name || colItem.label || colItem.columnName
-                        : String(colItem);
-                    if (!colNameStr || seenNames.has(colNameStr)) {
+                    const colNameStr = extractColumnName(colItem);
+                    if (!colNameStr || seenNames.has(colNameStr.toLowerCase())) {
                       return false;
                     }
-                    seenNames.add(colNameStr);
+                    seenNames.add(colNameStr.toLowerCase());
                     return true;
                   },
                 );
@@ -744,46 +780,53 @@ const config: ControlPanelConfig = {
                   Array.isArray(allColumns) &&
                   allColumns.length > 0
                     ? uniqueValueList.map((colItem: any) => {
-                        const colNameStr =
-                          typeof colItem === 'object' && colItem !== null
-                            ? colItem.column_name || colItem.label
-                            : colItem;
-                        const colDef = allColumns.find(
-                          (c: any) =>
-                            c.column_name === colNameStr ||
-                            c.label === colNameStr ||
-                            c.verbose_name === colNameStr,
-                        );
-                        if (colDef) {
-                          const expr =
-                            colDef.expression ||
-                            colDef.sqlExpression ||
-                            colDef.sql_expression ||
-                            colDef.sql;
-                          if (expr) {
-                            if (typeof colItem === 'object' && colItem !== null) {
-                              return {
-                                ...colDef,
-                                ...colItem,
-                                column_name: colNameStr,
-                                label: colDef.verbose_name || colDef.label || colNameStr,
-                                expression: expr,
-                                groupby: true,
-                              };
-                            }
-                            return {
-                              ...colDef,
-                              column_name: colNameStr,
-                              label: colDef.verbose_name || colDef.label || colNameStr,
-                              expression: expr,
-                              groupby: true,
-                            };
-                          }
-                        }
-                        if (typeof colItem === 'object' && colItem !== null) {
-                          return { ...colItem, groupby: true };
-                        }
-                        return { column_name: colNameStr, label: colNameStr, groupby: true };
+                        const colNameStr = extractColumnName(colItem);
+                        const colDef = findColDef(allColumns, colNameStr);
+
+                        const expr =
+                          colDef?.expression ||
+                          colDef?.sqlExpression ||
+                          colDef?.sql_expression ||
+                          colDef?.sql ||
+                          (typeof colItem === 'object' && colItem !== null
+                            ? colItem.expression || colItem.sqlExpression
+                            : undefined);
+
+                        const colLabel =
+                          colDef?.verbose_name ||
+                          colDef?.label ||
+                          (typeof colItem === 'object' && colItem !== null
+                            ? colItem.label || colItem.verbose_name
+                            : undefined) ||
+                          colNameStr;
+
+                        const colType =
+                          colDef?.type ||
+                          (typeof colItem === 'object' && colItem !== null
+                            ? colItem.type
+                            : undefined) ||
+                          'STRING';
+
+                        const typeGeneric =
+                          colDef?.type_generic ??
+                          (typeof colItem === 'object' && colItem !== null
+                            ? colItem.type_generic
+                            : undefined);
+
+                        return {
+                          ...(colDef || {}),
+                          ...(typeof colItem === 'object' && colItem !== null
+                            ? colItem
+                            : {}),
+                          column_name: colNameStr,
+                          optionName: colNameStr,
+                          label: colLabel,
+                          verbose_name: colLabel,
+                          expression: expr,
+                          type: colType,
+                          type_generic: typeGeneric,
+                          groupby: true,
+                        };
                       })
                     : uniqueValueList;
 

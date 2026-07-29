@@ -288,19 +288,118 @@ export default function ChartLevelActionsControl({
                     overflow: 'auto',
                   }}
                 >
-                  <pre
-                    style={{
-                      margin: 0,
-                      fontSize: '11px',
-                      fontFamily: 'monospace',
-                      flex: 1,
+                  <Form.Item noStyle dependencies={['payloadMapping', 'additionalFields']}>
+                    {({ getFieldValue }) => {
+                      const payloadMappingStr = getFieldValue('payloadMapping');
+                      const additionalFields = getFieldValue('additionalFields');
+
+                      let previewContent = '';
+                      let isValidJson = true;
+
+                      if (payloadMappingStr && payloadMappingStr.trim()) {
+                        try {
+                          const parsed = JSON.parse(payloadMappingStr.trim());
+                          previewContent = JSON.stringify(parsed, null, 2);
+                        } catch (_e) {
+                          isValidJson = false;
+                          previewContent = payloadMappingStr;
+                        }
+                      } else {
+                        const previewObj: Record<string, any> = {};
+
+                        if (Array.isArray(additionalFields)) {
+                          additionalFields.forEach(field => {
+                            if (!field) return;
+
+                            const mappedKey =
+                              field.mappedColumn ||
+                              field.columnName ||
+                              field.column;
+
+                            if (field.type === 'hierarchy') {
+                              const isMulti =
+                                field.multiple ||
+                                Array.isArray(field.name) ||
+                                field.isMulti;
+
+                              if (Array.isArray(field.name)) {
+                                field.name.forEach((fName: string) => {
+                                  if (!fName) return;
+                                  const key = mappedKey || fName;
+                                  previewObj[key] = isMulti
+                                    ? [`sample_${fName}_value`]
+                                    : `sample_${fName}_value`;
+                                });
+                              } else if (field.name) {
+                                const key = mappedKey || field.name;
+                                previewObj[key] = isMulti
+                                  ? [`sample_${field.name}_value`]
+                                  : `sample_${field.name}_value`;
+                              }
+                              return;
+                            }
+
+                            const fName = field.name;
+                            if (!fName && !mappedKey) return;
+                            const key = mappedKey || fName;
+
+                            switch (field.type) {
+                              case 'number':
+                                previewObj[key] = 100;
+                                break;
+                              case 'select':
+                              case 'dropdown':
+                                if (
+                                  Array.isArray(field.options) &&
+                                  field.options.length > 0
+                                ) {
+                                  previewObj[key] = field.options[0];
+                                } else {
+                                  previewObj[key] = 'sample_option';
+                                }
+                                break;
+                              case 'date':
+                                previewObj[key] = '2026-01-01';
+                                break;
+                              case 'checkbox':
+                                previewObj[key] = true;
+                                break;
+                              case 'textarea':
+                                previewObj[key] = 'sample_text_content';
+                                break;
+                              case 'file':
+                                previewObj[key] = field.multiple
+                                  ? ['base64_file_content']
+                                  : 'base64_file_content';
+                                break;
+                              default:
+                                previewObj[key] = `sample_${fName || mappedKey}_value`;
+                                break;
+                            }
+                          });
+                        }
+
+                        previewContent =
+                          Object.keys(previewObj).length > 0
+                            ? JSON.stringify(previewObj, null, 2)
+                            : '{\n  // Add form fields above to generate payload\n}';
+                      }
+
+                      return (
+                        <pre
+                          style={{
+                            margin: 0,
+                            fontSize: '11px',
+                            fontFamily: 'monospace',
+                            flex: 1,
+                            color: isValidJson ? '#333' : '#d9534f',
+                          }}
+                        >
+                          {previewContent}
+                        </pre>
+                      );
                     }}
-                  >
-                    {`{
-  "field_name_1": "value_1",
-  "field_name_2": "value_2"
-}`}
-                  </pre>
+                  </Form.Item>
                 </div>
               </div>
             </Col>
