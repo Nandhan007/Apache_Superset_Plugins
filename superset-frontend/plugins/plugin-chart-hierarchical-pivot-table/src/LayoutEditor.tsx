@@ -473,7 +473,7 @@ export default function LayoutEditor({
       okText={t('Apply')}
       className="hierarchical-pivot-table-layout-editor"
       destroyOnHidden
-      getContainer={mountNode ? () => mountNode : undefined}
+      getContainer={mountNode ? () => mountNode : () => document.body}
       styles={mountNode ? { mask: { position: 'absolute' } } : undefined}
       centered
     >

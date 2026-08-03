@@ -29,12 +29,13 @@ import {
 } from '@superset-ui/core';
 import { GenericDataType } from '@apache-superset/core/common';
 import { getColorFormatters } from '@superset-ui/chart-controls';
+import { notification } from 'antd';
 import { DateFormatter } from '../types';
 import { HierarchyFieldConfig } from '../types/hierarchy';
 
 const { DATABASE_DATETIME } = TimeFormats;
 
-function parseExpressionJson(expression: string): any {
+function parseExpressionJson(expression: string, colName?: string): any {
   if (!expression) return null;
   const cleanExpr = expression.trim();
 
@@ -55,6 +56,13 @@ function parseExpressionJson(expression: string): any {
   }
 
   if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+    if (colName) {
+      notification.error({
+        key: `hierarchy_json_err_${colName}`,
+        message: 'Hierarchy Field Invalid',
+        duration: 5,
+      });
+    }
     return null;
   }
 
@@ -79,12 +87,19 @@ function parseExpressionJson(expression: string): any {
 
   try {
     return JSON.parse(jsonCandidate);
-  } catch (e) {
+  } catch (e: any) {
     try {
       const doubleQuoteJson = jsonCandidate.replace(/'/g, '"');
       return JSON.parse(doubleQuoteJson);
-    } catch (_e2) {
+    } catch (_e2: any) {
       console.error('Failed to parse expression JSON:', expression, e);
+      if (colName) {
+        notification.error({
+          key: `hierarchy_json_err_${colName}`,
+          message: 'Hierarchy Field Invalid',
+          duration: 5,
+        });
+      }
       return null;
     }
   }
@@ -124,10 +139,16 @@ function findColumnExpression(
     const target = colNameStr.toLowerCase().trim();
     const found = allColumns.find((c: any) => {
       if (!c) return false;
-      const cName = String(c.column_name || '').toLowerCase().trim();
+      const cName = String(c.column_name || c.columnName || '').toLowerCase().trim();
       const cLabel = String(c.label || '').toLowerCase().trim();
       const cVerbose = String(c.verbose_name || '').toLowerCase().trim();
-      return cName === target || cLabel === target || cVerbose === target;
+      const cOpt = String(c.optionName || '').toLowerCase().trim();
+      return (
+        (cName && cName === target) ||
+        (cLabel && cLabel === target) ||
+        (cVerbose && cVerbose === target) ||
+        (cOpt && cOpt === target)
+      );
     });
 
     if (found) {
@@ -252,37 +273,17 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
   const hierarchyFieldsList: HierarchyFieldConfig[] = [];
 
   function validateHierarchyJson(parsed: any, colName: string): void {
-    if (parsed === null || parsed === undefined) {
-      throw new Error(
-        `Invalid hierarchy configuration on column "${colName}". Please ensure it contains a valid JSON string.`,
-      );
-    }
+    if (parsed === null || parsed === undefined) return;
     const items = Array.isArray(parsed) ? parsed : [parsed];
-    if (items.length === 0) {
-      throw new Error(
-        `The hierarchy configuration on column "${colName}" is empty.`,
-      );
-    }
     for (let i = 0; i < items.length; i += 1) {
       const item = items[i];
-      if (
-        typeof item !== 'object' ||
-        item === null ||
-        typeof item.columnName !== 'string' ||
-        !item.columnName.trim() ||
-        typeof item.fieldName !== 'string' ||
-        !item.fieldName.trim() ||
-        typeof item.fieldLabel !== 'string' ||
-        !item.fieldLabel.trim() ||
-        typeof item.level !== 'number' ||
-        Number.isNaN(item.level) ||
-        typeof item.hierarchyGroup !== 'string' ||
-        !item.hierarchyGroup.trim()
-      ) {
-        throw new Error(
-          `Invalid hierarchy structure on column "${colName}". Please ensure the JSON configuration includes all required properties (columnName, fieldName, fieldLabel, level, and hierarchyGroup).`,
-        );
-      }
+      if (typeof item !== 'object' || item === null) continue;
+
+      if (!item.columnName && item.column_name) item.columnName = item.column_name;
+      if (!item.fieldName && item.field_name) item.fieldName = item.field_name;
+      if (!item.fieldLabel && item.field_label) item.fieldLabel = item.field_label;
+      if (!item.hierarchyGroup && item.hierarchy_group) item.hierarchyGroup = item.hierarchy_group;
+      if (!item.hierarchyGroup) item.hierarchyGroup = colName || 'Default';
     }
   }
 
@@ -316,7 +317,7 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
         );
         return;
       }
-      parsed = parseExpressionJson(expression);
+      parsed = parseExpressionJson(expression, String(colNameStr));
     }
 
     if (!parsed) {
@@ -343,8 +344,10 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
 
   const seen = new Set<string>();
   const hierarchyFields = hierarchyFieldsList.filter(item => {
-    const key = item.fieldName || item.columnName;
-    if (key && !seen.has(key)) {
+    const group = item.hierarchyGroup || (item as any).hierarchy_group || '';
+    const name = item.fieldName || item.columnName;
+    const key = `${group}:${name}`;
+    if (name && !seen.has(key)) {
       seen.add(key);
       return true;
     }

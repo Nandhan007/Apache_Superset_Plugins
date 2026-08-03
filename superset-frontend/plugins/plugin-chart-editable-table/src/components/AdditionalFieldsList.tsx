@@ -64,6 +64,14 @@ export default function AdditionalFieldsList({
   const columnsToDisplay =
     allColumns.length > 0 ? allColumns : datasourceColumns;
 
+  const availableHierarchyGroups = Array.from(
+    new Set(
+      (hierarchyFields || [])
+        .map((hf: any) => hf.hierarchyGroup || hf.hierarchy_group)
+        .filter((g: any): g is string => !!g),
+    ),
+  );
+
   return (
     <div
       style={{
@@ -116,24 +124,63 @@ export default function AdditionalFieldsList({
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {item.type === 'hierarchy' ? (
                   <Select
-                    mode={item.multiple ? 'multiple' : undefined}
+                    mode={
+                      item.multipleFields || Array.isArray(item.name)
+                        ? 'multiple'
+                        : undefined
+                    }
                     showSearch
                     placeholder="Select hierarchy field(s)"
-                    value={item.name || (item.multiple ? [] : undefined)}
+                    value={
+                      item.multipleFields || Array.isArray(item.name)
+                        ? Array.isArray(item.name)
+                          ? item.name
+                          : item.name
+                          ? [item.name]
+                          : []
+                        : typeof item.name === 'string'
+                        ? item.name || undefined
+                        : Array.isArray(item.name)
+                        ? item.name[0] || undefined
+                        : undefined
+                    }
                     onChange={val => handleChange(index, 'name', val)}
                     style={{ flex: 1 }}
                     size="small"
                     optionFilterProp="children"
                   >
-                    {hierarchyFields &&
-                      hierarchyFields.map((hf: any) => (
-                        <Select.Option
-                          key={hf.fieldName || hf.columnName}
-                          value={hf.fieldName || hf.columnName}
-                        >
-                          {hf.fieldLabel || hf.fieldName || hf.columnName}
-                        </Select.Option>
-                      ))}
+                    {(() => {
+                      const filtered = (hierarchyFields || []).filter((hf: any) => {
+                        if (!item.hierarchyGroup || item.hierarchyGroup === 'All') return true;
+                        const grp = hf.hierarchyGroup || hf.hierarchy_group || '';
+                        return grp.toLowerCase().trim() === item.hierarchyGroup.toLowerCase().trim();
+                      });
+
+                      const seenNames = new Set<string>();
+                      const deduplicated: any[] = [];
+                      filtered.forEach((hf: any) => {
+                        const name = (hf.fieldName || hf.columnName || '').trim();
+                        if (name && !seenNames.has(name.toLowerCase())) {
+                          seenNames.add(name.toLowerCase());
+                          deduplicated.push(hf);
+                        }
+                      });
+
+                      return deduplicated.map((hf: any) => {
+                        const fieldVal = hf.fieldName || hf.columnName;
+                        const label =
+                          hf.fieldLabel ||
+                          hf.label ||
+                          hf.verbose_name ||
+                          hf.fieldName ||
+                          hf.columnName;
+                        return (
+                          <Select.Option key={fieldVal} value={fieldVal}>
+                            {label}
+                          </Select.Option>
+                        );
+                      });
+                    })()}
                   </Select>
                 ) : (
                   <Input
@@ -245,7 +292,7 @@ export default function AdditionalFieldsList({
                         key={col.column_name}
                         value={col.column_name}
                       >
-                        {col.verbose_name || col.column_name}
+                        {(col as any).label || col.verbose_name || col.column_name}
                       </Select.Option>
                     ))}
                   </Select>
@@ -264,9 +311,78 @@ export default function AdditionalFieldsList({
                 </div>
               )}
               {item.type === 'hierarchy' && (
-                <div style={{ marginTop: 8, paddingLeft: 4 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    marginTop: 6,
+                    paddingLeft: 4,
+                    flexWrap: 'wrap',
+                    gap: 12,
+                  }}
+                >
+                  {availableHierarchyGroups.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          color: '#666',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {t('Group')}:
+                      </span>
+                      <Select
+                        size="small"
+                        style={{ minWidth: 100 }}
+                        allowClear
+                        placeholder={t('All')}
+                        value={item.hierarchyGroup || undefined}
+                        onChange={val => {
+                          const newGroupFields = val
+                            ? (hierarchyFields || [])
+                                .filter(
+                                  (hf: any) =>
+                                    (hf.hierarchyGroup ||
+                                      hf.hierarchy_group) === val,
+                                )
+                                .map(
+                                  (hf: any) => hf.fieldName || hf.columnName,
+                                )
+                            : [];
+
+                          let updatedName: string | string[] = item.name;
+                          if (val && item.name) {
+                            if (Array.isArray(item.name)) {
+                              updatedName = item.name.filter(n =>
+                                newGroupFields.includes(n),
+                              );
+                            } else if (!newGroupFields.includes(item.name)) {
+                              updatedName = '';
+                            }
+                          }
+
+                          const newValue = [...value];
+                          newValue[index] = {
+                            ...newValue[index],
+                            hierarchyGroup: val,
+                            name: updatedName,
+                          };
+                          if (onChange) onChange(newValue);
+                        }}
+                        options={[
+                          { label: t('All'), value: '' },
+                          ...availableHierarchyGroups.map(g => ({
+                            label: g,
+                            value: g,
+                          })),
+                        ]}
+                      />
+                    </div>
+                  )}
+
                   <Checkbox
-                    checked={item.multiple}
+                    checked={!!(item.multipleFields || Array.isArray(item.name))}
                     onChange={e => {
                       const isChecked = e.target.checked;
                       let newName = item.name;
@@ -284,14 +400,49 @@ export default function AdditionalFieldsList({
                       const newValue = [...value];
                       newValue[index] = {
                         ...newValue[index],
-                        multiple: isChecked,
+                        multipleFields: isChecked,
                         name: newName,
                       };
                       if (onChange) onChange(newValue);
                     }}
+                    style={{ fontSize: '12px' }}
                   >
-                    {t('Allow Multiple Selections')}
+                    {t('Allow Multi-Fields')}
                   </Checkbox>
+
+                  <Checkbox
+                    checked={!!item.isMulti}
+                    onChange={e => {
+                      handleChange(index, 'isMulti', e.target.checked);
+                    }}
+                    style={{ fontSize: '12px' }}
+                  >
+                    {t('Allow Multi-Values')}
+                  </Checkbox>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        color: '#666',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {t('Sort')}:
+                    </span>
+                    <Select
+                      size="small"
+                      style={{ width: 110 }}
+                      value={item.sortMethod || 'Default'}
+                      onChange={val => handleChange(index, 'sortMethod', val)}
+                      options={[
+                        { label: t('Default'), value: 'Default' },
+                        { label: t('Ascending'), value: 'Ascending' },
+                        { label: t('Descending'), value: 'Descending' },
+                        { label: t('Chronological'), value: 'Chronological' },
+                      ]}
+                    />
+                  </div>
                 </div>
               )}
             </div>

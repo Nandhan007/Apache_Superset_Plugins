@@ -3,12 +3,12 @@ export interface HierarchyFieldConfig {
   fieldName: string;
   fieldLabel: string;
   columnName: string;
-  parentField: string | string[] | null;
+  parentField: string | null;
   filterColumn: string;
   hierarchyGroup: string;
   excludeFilter?: boolean;
   isMulti?: boolean;
-  sortMethod?: 'Default' | 'Chronological';
+  sortMethod?: 'Default' | 'Ascending' | 'Descending' | 'Chronological';
 }
 
 export type FieldType =
@@ -28,6 +28,10 @@ export interface AdditionalFieldConfig {
   required: boolean;
   options?: string[];
   multiple?: boolean;
+  multipleFields?: boolean;
+  isMulti?: boolean;
+  hierarchyGroup?: string;
+  sortMethod?: 'Default' | 'Ascending' | 'Descending' | 'Chronological';
   mappedColumn?: string;
 }
 

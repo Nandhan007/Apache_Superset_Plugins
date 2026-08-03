@@ -464,7 +464,7 @@ export default function LayoutEditor({
       ]}
       className="pivot-table-layout-editor"
       destroyOnHidden
-      getContainer={mountNode ? () => mountNode : undefined}
+      getContainer={mountNode ? () => mountNode : () => document.body}
       styles={mountNode ? { mask: { position: 'absolute' } } : undefined}
       centered
     >
@@ -475,7 +475,7 @@ export default function LayoutEditor({
           items={[
             {
               key: '1',
-              label: t('Dimensions'),
+              label: t('Layout'),
               children: (
                 <Container>
                   {/* Single Pane for Dimensions with Checks? 

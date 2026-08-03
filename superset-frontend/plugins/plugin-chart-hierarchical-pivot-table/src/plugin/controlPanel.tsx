@@ -33,6 +33,7 @@ import {
   validateNonEmpty,
 } from '@superset-ui/core';
 import { t } from '@apache-superset/core/translation';
+import { notification } from 'antd';
 import { MetricsLayoutEnum } from '../types';
 import CellEditPayloadMappingControl from '../components/CellEditPayloadMappingControl';
 import ChartLevelActionsControl from '../components/ChartLevelActionsControl';
@@ -40,7 +41,7 @@ import RowLevelActionsControl from '../components/RowLevelActionsControl';
 import HTMLViewerActionsControl from '../components/HTMLViewerActionsControl';
 import RedirectionConfigControl from '../components/RedirectionConfigControl';
 
-function parseExpressionJson(expression: string): any {
+function parseExpressionJson(expression: string, colName?: string): any {
   if (!expression) return null;
   const cleanExpr = expression.trim();
 
@@ -61,6 +62,13 @@ function parseExpressionJson(expression: string): any {
   }
 
   if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+    if (colName) {
+      notification.error({
+        key: `hierarchy_json_err_${colName}`,
+        message: 'Hierarchy Field Invalid',
+        duration: 5,
+      });
+    }
     return null;
   }
 
@@ -85,12 +93,19 @@ function parseExpressionJson(expression: string): any {
 
   try {
     return JSON.parse(jsonCandidate);
-  } catch (e) {
+  } catch (e: any) {
     try {
       const doubleQuoteJson = jsonCandidate.replace(/'/g, '"');
       return JSON.parse(doubleQuoteJson);
-    } catch (_e2) {
+    } catch (_e2: any) {
       console.error('Failed to parse expression JSON:', expression, e);
+      if (colName) {
+        notification.error({
+          key: `hierarchy_json_err_${colName}`,
+          message: 'Hierarchy Field Invalid',
+          duration: 5,
+        });
+      }
       return null;
     }
   }
@@ -98,37 +113,66 @@ function parseExpressionJson(expression: string): any {
 
 function validateHierarchyJson(parsed: any, colName: string): void {
   if (parsed === null || parsed === undefined) {
-    throw new Error(
-      `Invalid hierarchy configuration on column "${colName}". Please ensure it contains a valid JSON string.`,
-    );
+    notification.error({
+      key: `hierarchy_struct_err_${colName}`,
+      message: 'Hierarchy Field Invalid',
+      duration: 5,
+    });
+    return;
   }
   const items = Array.isArray(parsed) ? parsed : [parsed];
   if (items.length === 0) {
-    throw new Error(
-      `The hierarchy configuration on column "${colName}" is empty.`,
-    );
+    notification.error({
+      key: `hierarchy_struct_err_${colName}`,
+      message: 'Hierarchy Field Invalid',
+      duration: 5,
+    });
+    return;
   }
   for (let i = 0; i < items.length; i += 1) {
     const item = items[i];
-    if (
-      typeof item !== 'object' ||
-      item === null ||
-      typeof item.columnName !== 'string' ||
-      !item.columnName.trim() ||
-      typeof item.fieldName !== 'string' ||
-      !item.fieldName.trim() ||
-      typeof item.fieldLabel !== 'string' ||
-      !item.fieldLabel.trim() ||
-      typeof item.level !== 'number' ||
-      Number.isNaN(item.level) ||
-      typeof item.hierarchyGroup !== 'string' ||
-      !item.hierarchyGroup.trim()
-    ) {
-      throw new Error(
-        `Invalid hierarchy structure on column "${colName}". Please ensure the JSON configuration includes all required properties (columnName, fieldName, fieldLabel, level, and hierarchyGroup).`,
-      );
+    if (typeof item !== 'object' || item === null) {
+      notification.error({
+        key: `hierarchy_struct_err_${colName}`,
+        message: 'Hierarchy Field Invalid',
+        duration: 5,
+      });
+      continue;
     }
+
+    if (!item.columnName && item.column_name) item.columnName = item.column_name;
+    if (!item.fieldName && item.field_name) item.fieldName = item.field_name;
+    if (!item.fieldLabel && item.field_label) item.fieldLabel = item.field_label;
+    if (!item.hierarchyGroup && item.hierarchy_group) item.hierarchyGroup = item.hierarchy_group;
+
+    if (!item.columnName || !item.fieldName) {
+      notification.error({
+        key: `hierarchy_struct_err_${colName}`,
+        message: 'Hierarchy Field Invalid',
+        duration: 5,
+      });
+    }
+
+    if (!item.hierarchyGroup) item.hierarchyGroup = colName || 'Default';
   }
+}
+
+function findColDef(allCols: any[], name: string): any {
+  if (!name || !Array.isArray(allCols)) return undefined;
+  const target = String(name).toLowerCase().trim();
+  return allCols.find((c: any) => {
+    if (!c) return false;
+    const cName = String(c.column_name || c.columnName || '').toLowerCase().trim();
+    const cLabel = String(c.label || '').toLowerCase().trim();
+    const cVerbose = String(c.verbose_name || '').toLowerCase().trim();
+    const cOpt = String(c.optionName || '').toLowerCase().trim();
+    return (
+      (cName && cName === target) ||
+      (cLabel && cLabel === target) ||
+      (cVerbose && cVerbose === target) ||
+      (cOpt && cOpt === target)
+    );
+  });
 }
 
 const config: ControlPanelConfig = {
@@ -493,15 +537,27 @@ const config: ControlPanelConfig = {
                   hierarchyColumns.forEach((colName: any) => {
                     const colNameStr =
                       typeof colName === 'object' && colName !== null
-                        ? (colName as any).column_name || (colName as any).label
-                        : colName;
-                    const colDef = allColumns.find(
-                      (c: any) =>
-                        c.column_name === colNameStr ||
-                        c.label === colNameStr ||
-                        c.verbose_name === colNameStr,
-                    );
-                    let expression = colDef?.expression;
+                        ? (colName as any).column_name ||
+                          (colName as any).label ||
+                          (colName as any).columnName ||
+                          (colName as any).optionName
+                        : String(colName);
+                    const colDef = findColDef(allColumns, colNameStr);
+                    let expression =
+                      colDef?.expression ||
+                      colDef?.sqlExpression ||
+                      colDef?.sql_expression ||
+                      colDef?.sql;
+
+                    if (
+                      !expression &&
+                      colDef?.column_name &&
+                      (state.form_data as any)?.hierarchyColumnDefs?.[colDef.column_name]
+                    ) {
+                      expression = (state.form_data as any).hierarchyColumnDefs[
+                        colDef.column_name
+                      ];
+                    }
                     if (
                       !expression &&
                       (state.form_data as any)?.hierarchyColumnDefs?.[colNameStr]
@@ -513,14 +569,20 @@ const config: ControlPanelConfig = {
                     if (
                       !expression &&
                       typeof colName === 'object' &&
-                      colName !== null &&
-                      (colName as any).expression
+                      colName !== null
                     ) {
-                      expression = (colName as any).expression;
+                      expression =
+                        (colName as any).expression ||
+                        (colName as any).sqlExpression ||
+                        (colName as any).sql_expression ||
+                        (colName as any).sql;
+                    }
+                    if (!expression && typeof colName === 'string') {
+                      expression = colName;
                     }
                     if (expression) {
                       try {
-                        const parsed = parseExpressionJson(expression);
+                        const parsed = parseExpressionJson(expression, colNameStr);
                         if (parsed) {
                           validateHierarchyJson(parsed, colNameStr);
                           if (Array.isArray(parsed)) {
@@ -537,8 +599,11 @@ const config: ControlPanelConfig = {
                 }
                 const seen = new Set<string>();
                 const hierarchyFields = hierarchyFieldsList.filter(item => {
-                  const key = item.fieldName || item.columnName;
-                  if (key && !seen.has(key)) {
+                  const group =
+                    item.hierarchyGroup || (item as any).hierarchy_group || '';
+                  const name = item.fieldName || item.columnName;
+                  const key = `${group}:${name}`;
+                  if (name && !seen.has(key)) {
                     seen.add(key);
                     return true;
                   }
@@ -582,15 +647,27 @@ const config: ControlPanelConfig = {
                   hierarchyColumns.forEach((colName: any) => {
                     const colNameStr =
                       typeof colName === 'object' && colName !== null
-                        ? (colName as any).column_name || (colName as any).label
-                        : colName;
-                    const colDef = allColumns.find(
-                      (c: any) =>
-                        c.column_name === colNameStr ||
-                        c.label === colNameStr ||
-                        c.verbose_name === colNameStr,
-                    );
-                    let expression = colDef?.expression;
+                        ? (colName as any).column_name ||
+                          (colName as any).label ||
+                          (colName as any).columnName ||
+                          (colName as any).optionName
+                        : String(colName);
+                    const colDef = findColDef(allColumns, colNameStr);
+                    let expression =
+                      colDef?.expression ||
+                      colDef?.sqlExpression ||
+                      colDef?.sql_expression ||
+                      colDef?.sql;
+
+                    if (
+                      !expression &&
+                      colDef?.column_name &&
+                      (state.form_data as any)?.hierarchyColumnDefs?.[colDef.column_name]
+                    ) {
+                      expression = (state.form_data as any).hierarchyColumnDefs[
+                        colDef.column_name
+                      ];
+                    }
                     if (
                       !expression &&
                       (state.form_data as any)?.hierarchyColumnDefs?.[colNameStr]
@@ -602,14 +679,20 @@ const config: ControlPanelConfig = {
                     if (
                       !expression &&
                       typeof colName === 'object' &&
-                      colName !== null &&
-                      (colName as any).expression
+                      colName !== null
                     ) {
-                      expression = (colName as any).expression;
+                      expression =
+                        (colName as any).expression ||
+                        (colName as any).sqlExpression ||
+                        (colName as any).sql_expression ||
+                        (colName as any).sql;
+                    }
+                    if (!expression && typeof colName === 'string') {
+                      expression = colName;
                     }
                     if (expression) {
                       try {
-                        const parsed = parseExpressionJson(expression);
+                        const parsed = parseExpressionJson(expression, colNameStr);
                         if (parsed) {
                           validateHierarchyJson(parsed, colNameStr);
                           if (Array.isArray(parsed)) {
@@ -626,8 +709,11 @@ const config: ControlPanelConfig = {
                 }
                 const seen = new Set<string>();
                 const hierarchyFields = hierarchyFieldsList.filter(item => {
-                  const key = item.fieldName || item.columnName;
-                  if (key && !seen.has(key)) {
+                  const group =
+                    item.hierarchyGroup || (item as any).hierarchy_group || '';
+                  const name = item.fieldName || item.columnName;
+                  const key = `${group}:${name}`;
+                  if (name && !seen.has(key)) {
                     seen.add(key);
                     return true;
                   }

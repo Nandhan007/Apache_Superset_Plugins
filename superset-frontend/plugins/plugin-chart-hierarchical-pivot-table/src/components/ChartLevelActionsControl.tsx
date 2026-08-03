@@ -66,11 +66,31 @@ export default function ChartLevelActionsControl({
     form.validateFields().then(values => {
       const config: ChartLevelActionConfig = {
         ...values,
-        // Ensure we don't carry over legacy formFields if we switched to additionalFields
-        // formFields: undefined,
-        // Actually, let's just let values spread.
-        // The form item name for AdditionalFieldsList will be 'additionalFields'.
       };
+
+      if (Array.isArray(config.additionalFields) && Array.isArray(hierarchyFields)) {
+        const allFormNames = config.additionalFields.flatMap((f: any) =>
+          Array.isArray(f.name) ? f.name : [f.name],
+        );
+        config.additionalFields = config.additionalFields.map((f: any) => {
+          if (f.type === 'hierarchy' && (!f.hierarchyGroup || f.hierarchyGroup === 'All')) {
+            const fieldNames = Array.isArray(f.name) ? f.name : [f.name];
+            const candidate = hierarchyFields.find((hf: any) => {
+              const nameMatches = fieldNames.includes(hf.fieldName) || fieldNames.includes(hf.columnName);
+              if (!nameMatches || !hf.parentField) return false;
+              const parent = Array.isArray(hf.parentField) ? hf.parentField[0] : hf.parentField;
+              return allFormNames.includes(parent);
+            });
+            if (candidate) {
+              const grp = candidate.hierarchyGroup || (candidate as any).hierarchy_group;
+              if (grp) {
+                return { ...f, hierarchyGroup: grp };
+              }
+            }
+          }
+          return f;
+        });
+      }
 
       const newValue = [...value];
       if (editingIndex !== null) {

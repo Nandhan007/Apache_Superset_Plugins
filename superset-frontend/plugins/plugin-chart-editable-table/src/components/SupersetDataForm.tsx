@@ -51,48 +51,102 @@ export default function SupersetDataForm({
 
   // Helper to find config for a field
   const getFieldConfig = useCallback(
-    (fieldName: string) => {
-      const globalConfig = hierarchyConfig.find(
-        c => c.fieldName === fieldName || c.columnName === fieldName,
-      );
-      if (globalConfig) return globalConfig;
+    (fieldName: string, groupOverride?: string) => {
+      const additionalConfig = additionalFields.find(f => {
+        if (Array.isArray(f.name)) {
+          return f.name.includes(fieldName);
+        }
+        return f.name === fieldName;
+      });
 
-      const additionalConfig = additionalFields.find(f => f.name === fieldName);
+      const rawTargetGroup = groupOverride || additionalConfig?.hierarchyGroup;
+
+      const autoDetectedGroup = (() => {
+        if (rawTargetGroup && rawTargetGroup !== 'All') return rawTargetGroup;
+        const candidate = hierarchyConfig.find(c => {
+          const nameMatches = c.fieldName === fieldName || c.columnName === fieldName;
+          if (!nameMatches || !c.parentField) return false;
+          const parent = Array.isArray(c.parentField) ? c.parentField[0] : c.parentField;
+          return Array.isArray(formFields) && formFields.includes(parent);
+        });
+        return candidate ? (candidate.hierarchyGroup || (candidate as any).hierarchy_group) : undefined;
+      })();
+
+      const targetGroup = autoDetectedGroup || rawTargetGroup;
+
+      const matchesGroup = (c: any) => {
+        if (!targetGroup || targetGroup === 'All') return true;
+        const grp = c.hierarchyGroup || c.hierarchy_group || '';
+        return grp.toLowerCase().trim() === targetGroup.toLowerCase().trim();
+      };
+
+      const matchingConfigs = hierarchyConfig.filter(c => {
+        const nameMatches =
+          c.fieldName === fieldName || c.columnName === fieldName;
+        return nameMatches && matchesGroup(c);
+      });
+
+      let globalConfig = matchingConfigs.find(c => {
+        if (c.parentField && Array.isArray(formFields)) {
+          const parent = Array.isArray(c.parentField) ? c.parentField[0] : c.parentField;
+          return formFields.includes(parent);
+        }
+        return false;
+      });
+
+      if (!globalConfig) {
+        globalConfig = matchingConfigs[0];
+      }
+
       if (additionalConfig?.type === 'hierarchy') {
         return {
-          level: 99,
+          ...(globalConfig || {}),
+          level: globalConfig?.level ?? 99,
           fieldName: fieldName,
           fieldLabel:
             additionalConfig.label ||
+            globalConfig?.fieldLabel ||
             fieldName.charAt(0).toUpperCase() +
               fieldName.slice(1).replace(/_/g, ' '),
-          columnName: fieldName,
-          parentField: null,
-          filterColumn: fieldName,
-          isMulti: additionalConfig.multiple,
+          columnName: globalConfig?.columnName || fieldName,
+          parentField: globalConfig?.parentField || null,
+          filterColumn: globalConfig?.filterColumn || fieldName,
+          hierarchyGroup:
+            globalConfig?.hierarchyGroup ||
+            (globalConfig as any)?.hierarchy_group ||
+            (targetGroup !== 'All' ? targetGroup : '') ||
+            '',
+          isMulti: !!additionalConfig.isMulti,
+          sortMethod: additionalConfig.sortMethod || 'Default',
         } as HierarchyFieldConfig;
       }
+
       if (
         (additionalConfig?.type === 'dropdown' ||
           additionalConfig?.type === 'text') &&
         additionalConfig.mappedColumn
       ) {
         return {
-          level: 99,
+          ...(globalConfig || {}),
+          level: globalConfig?.level ?? 99,
           fieldName: fieldName,
           fieldLabel:
             additionalConfig.label ||
+            globalConfig?.fieldLabel ||
             fieldName.charAt(0).toUpperCase() +
               fieldName.slice(1).replace(/_/g, ' '),
           columnName: additionalConfig.mappedColumn,
-          parentField: null,
+          parentField: globalConfig?.parentField || null,
           filterColumn: additionalConfig.mappedColumn,
           isMulti:
             additionalConfig.type === 'dropdown'
-              ? additionalConfig.multiple
+              ? !!(additionalConfig.isMulti || additionalConfig.multiple)
               : false,
+          sortMethod: additionalConfig.sortMethod || 'Default',
         } as HierarchyFieldConfig;
       }
+
+      if (globalConfig) return globalConfig;
       return undefined;
     },
     [hierarchyConfig, additionalFields],
@@ -100,9 +154,15 @@ export default function SupersetDataForm({
 
   // Check if a hierarchy field should render as Multi Select based on its config
   const getIsMulti = (fieldName: string) => {
-    const additionalConfig = getAdditionalConfig(fieldName);
+    const additionalConfig = additionalFields.find(f => {
+      if (Array.isArray(f.name)) {
+        return f.name.includes(fieldName);
+      }
+      return f.name === fieldName;
+    });
+
     if (additionalConfig && additionalConfig.type === 'hierarchy') {
-      return !!additionalConfig.multiple;
+      return !!additionalConfig.isMulti;
     }
     const config = hierarchyConfig.find(
       c => c.fieldName === fieldName || c.columnName === fieldName,
@@ -185,14 +245,18 @@ export default function SupersetDataForm({
         if (useApi) {
           const filters = [];
           if (config.parentField) {
-            const parents = Array.isArray(config.parentField)
-              ? config.parentField
-              : [config.parentField];
+            const parent = Array.isArray(config.parentField)
+              ? config.parentField[0]
+              : config.parentField;
 
-            for (const parent of parents) {
+            if (parent) {
               const parentVal = parentValues[parent];
-              if (parentVal) {
-                const parentConfig = getFieldConfig(parent);
+              if (
+                parentVal !== undefined &&
+                parentVal !== null &&
+                (!Array.isArray(parentVal) || parentVal.length > 0)
+              ) {
+                const parentConfig = getFieldConfig(parent, config.hierarchyGroup);
                 const filterCol = parentConfig?.columnName || parent;
 
                 filters.push({
@@ -227,32 +291,50 @@ export default function SupersetDataForm({
           let filteredRows = data || [];
 
           if (config.parentField) {
-            const parents = Array.isArray(config.parentField)
-              ? config.parentField
-              : [config.parentField];
-            filteredRows = filteredRows.filter(row => {
-              return parents.every(parent => {
-                const parentVal = parentValues[parent];
-                if (
-                  !parentVal ||
-                  (Array.isArray(parentVal) && parentVal.length === 0)
-                )
-                  return true;
+            const parent = Array.isArray(config.parentField)
+              ? config.parentField[0]
+              : config.parentField;
 
-                const parentConfig = getFieldConfig(parent);
+            if (parent) {
+              const parentVal = parentValues[parent];
+              if (
+                parentVal !== undefined &&
+                parentVal !== null &&
+                (!Array.isArray(parentVal) || parentVal.length > 0)
+              ) {
+                const parentConfig = getFieldConfig(parent, config.hierarchyGroup);
                 const filterCol = parentConfig?.columnName || parent;
-                const rowVal = row[filterCol];
 
-                if (Array.isArray(parentVal)) {
-                  return parentVal.some(val => String(val) === String(rowVal));
-                }
-                return String(rowVal) === String(parentVal);
-              });
-            });
+                filteredRows = filteredRows.filter(row => {
+                  const rowVal =
+                    row[filterCol] !== undefined ? row[filterCol] : row[parent];
+                  if (rowVal === undefined || rowVal === null) return false;
+                  if (Array.isArray(parentVal)) {
+                    return parentVal.some(
+                      val =>
+                        String(val).toLowerCase().trim() ===
+                        String(rowVal).toLowerCase().trim(),
+                    );
+                  }
+                  return (
+                    String(rowVal).toLowerCase().trim() ===
+                    String(parentVal).toLowerCase().trim()
+                  );
+                });
+              }
+            }
           }
 
           uniqueValues = Array.from(
-            new Set(filteredRows.map(row => row[config.columnName])),
+            new Set(
+              filteredRows
+                .map(row =>
+                  row[config.columnName] !== undefined
+                    ? row[config.columnName]
+                    : row[config.fieldName],
+                )
+                .filter(val => val !== undefined && val !== null && val !== ''),
+            ),
           );
         }
 
@@ -272,6 +354,12 @@ export default function SupersetDataForm({
             label: String(val),
           }))
           .sort((a, b) => {
+            if (sortMethod === 'Ascending') {
+              return a.label.localeCompare(b.label);
+            }
+            if (sortMethod === 'Descending') {
+              return b.label.localeCompare(a.label);
+            }
             if (useChrono) {
               return naturalSort(
                 getCustomSortKey(a.value, true),
@@ -367,9 +455,16 @@ export default function SupersetDataForm({
     }
 
     const children = hierarchyConfig.filter(c => {
-      if (Array.isArray(c.parentField))
-        return c.parentField.includes(fieldName);
-      return c.parentField === fieldName;
+      const parentMatches = Array.isArray(c.parentField)
+        ? c.parentField.includes(fieldName)
+        : c.parentField === fieldName;
+      if (!parentMatches) return false;
+
+      if (config?.hierarchyGroup) {
+        const childGroup = c.hierarchyGroup || (c as any).hierarchy_group;
+        return childGroup === config.hierarchyGroup;
+      }
+      return true;
     });
 
     const valuesToClear: Record<string, any> = {};
@@ -381,9 +476,16 @@ export default function SupersetDataForm({
         optionsToClear[c.fieldName] = [];
 
         const grandChildren = hierarchyConfig.filter(gc => {
-          if (Array.isArray(gc.parentField))
-            return gc.parentField.includes(c.fieldName);
-          return gc.parentField === c.fieldName;
+          const parentMatches = Array.isArray(gc.parentField)
+            ? gc.parentField.includes(c.fieldName)
+            : gc.parentField === c.fieldName;
+          if (!parentMatches) return false;
+
+          if (c.hierarchyGroup) {
+            const gcGroup = gc.hierarchyGroup || (gc as any).hierarchy_group;
+            return gcGroup === c.hierarchyGroup;
+          }
+          return true;
         });
         if (grandChildren.length > 0) recurseClear(grandChildren);
       });
@@ -451,12 +553,21 @@ export default function SupersetDataForm({
     const options = formState.options[fieldName] || [];
     const isDisabled = !!(
       isHierarchy &&
-      config.parentField &&
+      config?.parentField &&
       (() => {
         const parents = Array.isArray(config.parentField)
           ? config.parentField
           : [config.parentField];
-        return !parents.every(p => {
+
+        const activeParentsInForm = parents.filter(
+          p => formFields && formFields.includes(p),
+        );
+
+        if (activeParentsInForm.length === 0) {
+          return false;
+        }
+
+        return !activeParentsInForm.every(p => {
           const val = formState.values[p];
           return Array.isArray(val)
             ? val.length > 0
@@ -510,6 +621,7 @@ export default function SupersetDataForm({
           inputNode = (
             <Select
               showSearch
+              mode={additionalConfig.multiple ? 'multiple' : undefined}
               allowClear
               loading={
                 additionalConfig.mappedColumn

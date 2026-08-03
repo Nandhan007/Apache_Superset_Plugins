@@ -41,11 +41,12 @@ import {
   ConditionalFormattingConfig,
   getColorFormatters,
 } from '@superset-ui/chart-controls';
+import { notification } from 'antd';
 
 import { isEmpty, merge } from 'lodash';
 import { HierarchyFieldConfig } from './types/hierarchy';
 
-function parseExpressionJson(expression: string): any {
+function parseExpressionJson(expression: string, colName?: string): any {
   if (!expression) return null;
   const cleanExpr = expression.trim();
 
@@ -66,6 +67,13 @@ function parseExpressionJson(expression: string): any {
   }
 
   if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+    if (colName) {
+      notification.error({
+        key: `hierarchy_json_err_${colName}`,
+        message: 'Hierarchy Field Invalid',
+        duration: 5,
+      });
+    }
     return null;
   }
 
@@ -90,12 +98,19 @@ function parseExpressionJson(expression: string): any {
 
   try {
     return JSON.parse(jsonCandidate);
-  } catch (e) {
+  } catch (e: any) {
     try {
       const doubleQuoteJson = jsonCandidate.replace(/'/g, '"');
       return JSON.parse(doubleQuoteJson);
-    } catch (_e2) {
+    } catch (_e2: any) {
       console.error('Failed to parse expression JSON:', expression, e);
+      if (colName) {
+        notification.error({
+          key: `hierarchy_json_err_${colName}`,
+          message: 'Hierarchy Field Invalid',
+          duration: 5,
+        });
+      }
       return null;
     }
   }
@@ -672,37 +687,17 @@ const transformProps = (
   const hierarchyFieldsList: HierarchyFieldConfig[] = [];
 
   function validateHierarchyJson(parsed: any, colName: string): void {
-    if (parsed === null || parsed === undefined) {
-      throw new Error(
-        `Invalid hierarchy configuration on column "${colName}". Please ensure it contains a valid JSON string.`,
-      );
-    }
+    if (parsed === null || parsed === undefined) return;
     const items = Array.isArray(parsed) ? parsed : [parsed];
-    if (items.length === 0) {
-      throw new Error(
-        `The hierarchy configuration on column "${colName}" is empty.`,
-      );
-    }
     for (let i = 0; i < items.length; i += 1) {
       const item = items[i];
-      if (
-        typeof item !== 'object' ||
-        item === null ||
-        typeof item.columnName !== 'string' ||
-        !item.columnName.trim() ||
-        typeof item.fieldName !== 'string' ||
-        !item.fieldName.trim() ||
-        typeof item.fieldLabel !== 'string' ||
-        !item.fieldLabel.trim() ||
-        typeof item.level !== 'number' ||
-        Number.isNaN(item.level) ||
-        typeof item.hierarchyGroup !== 'string' ||
-        !item.hierarchyGroup.trim()
-      ) {
-        throw new Error(
-          `Invalid hierarchy structure on column "${colName}". Please ensure the JSON configuration includes all required properties (columnName, fieldName, fieldLabel, level, and hierarchyGroup).`,
-        );
-      }
+      if (typeof item !== 'object' || item === null) continue;
+
+      if (!item.columnName && item.column_name) item.columnName = item.column_name;
+      if (!item.fieldName && item.field_name) item.fieldName = item.field_name;
+      if (!item.fieldLabel && item.field_label) item.fieldLabel = item.field_label;
+      if (!item.hierarchyGroup && item.hierarchy_group) item.hierarchyGroup = item.hierarchy_group;
+      if (!item.hierarchyGroup) item.hierarchyGroup = colName || 'Default';
     }
   }
 
@@ -736,7 +731,7 @@ const transformProps = (
         );
         return;
       }
-      parsed = parseExpressionJson(expression);
+      parsed = parseExpressionJson(expression, String(colNameStr));
     }
 
     if (!parsed) {
@@ -763,8 +758,10 @@ const transformProps = (
 
   const seen = new Set<string>();
   const hierarchyFields = hierarchyFieldsList.filter(item => {
-    const key = item.fieldName || item.columnName;
-    if (key && !seen.has(key)) {
+    const group = item.hierarchyGroup || (item as any).hierarchy_group || '';
+    const name = item.fieldName || item.columnName;
+    const key = `${group}:${name}`;
+    if (name && !seen.has(key)) {
       seen.add(key);
       return true;
     }

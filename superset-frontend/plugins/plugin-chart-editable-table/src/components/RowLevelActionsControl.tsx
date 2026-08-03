@@ -62,6 +62,30 @@ export default function RowLevelActionsControl({
 
   const handleOk = () => {
     form.validateFields().then(values => {
+      const additionalFieldsList = values.additionalFields || [];
+      if (Array.isArray(additionalFieldsList) && Array.isArray(hierarchyFields)) {
+        const allFormNames = additionalFieldsList.flatMap((f: any) =>
+          Array.isArray(f.name) ? f.name : [f.name],
+        );
+        additionalFieldsList.forEach((f: any, idx: number) => {
+          if (f.type === 'hierarchy' && (!f.hierarchyGroup || f.hierarchyGroup === 'All')) {
+            const fieldNames = Array.isArray(f.name) ? f.name : [f.name];
+            const candidate = hierarchyFields.find((hf: any) => {
+              const nameMatches = fieldNames.includes(hf.fieldName) || fieldNames.includes(hf.columnName);
+              if (!nameMatches || !hf.parentField) return false;
+              const parent = Array.isArray(hf.parentField) ? hf.parentField[0] : hf.parentField;
+              return allFormNames.includes(parent);
+            });
+            if (candidate) {
+              const grp = candidate.hierarchyGroup || (candidate as any).hierarchy_group;
+              if (grp) {
+                additionalFieldsList[idx] = { ...f, hierarchyGroup: grp };
+              }
+            }
+          }
+        });
+      }
+
       const config: RowLevelActionConfig = {
         buttonLabel: values.buttonLabel,
         buttonIcon: values.buttonIcon,
@@ -69,10 +93,10 @@ export default function RowLevelActionsControl({
         modalTitle: values.modalTitle,
         apiEndpoint: values.apiEndpoint,
         hierarchyFields: [],
-        additionalFields: values.additionalFields || [],
+        additionalFields: additionalFieldsList,
         prefillFromRow: true,
         formFields: [
-          ...(values.additionalFields || []).flatMap(
+          ...additionalFieldsList.flatMap(
             (f: AdditionalFieldConfig) => f.name,
           ),
         ],

@@ -1646,7 +1646,6 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
                 setControlValue('metrics', newMetrics);
               }
             }}
-            mountNode={containerRef.current}
           />
           <PivotTableWrapper className="scrollable">
             <PivotTable
