@@ -422,9 +422,10 @@ export default function LayoutEditor({
   }, [allColumns]);
 
   const draggableItems = items.map((id, index) => {
-    // Find column meta if available
     const col = columnMap.get(id);
-    const text = col ? col.verbose_name || col.column_name : id;
+    const text = col
+      ? (col as any).label || col.verbose_name || col.column_name
+      : id;
 
     return (
       <Card

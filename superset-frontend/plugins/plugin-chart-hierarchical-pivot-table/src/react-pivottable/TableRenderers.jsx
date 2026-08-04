@@ -536,6 +536,38 @@ export const TableRenderer = React.memo(props => {
     }
   }, [onRegisterReset]);
 
+  const checkIsEditableMetric = useCallback(
+    targetMetricName => {
+      if (
+        !Array.isArray(editableMetrics) ||
+        editableMetrics.length === 0 ||
+        !targetMetricName
+      ) {
+        return false;
+      }
+      return editableMetrics.some(em => {
+        if (em === targetMetricName) return true;
+        if (
+          String(em).toLowerCase().trim() ===
+          String(targetMetricName).toLowerCase().trim()
+        )
+          return true;
+        if (Array.isArray(metrics)) {
+          return metrics.some(m => {
+            const name = typeof m === 'string' ? m : m.metric_name || m.label;
+            const label = typeof m === 'string' ? m : m.label || m.metric_name;
+            return (
+              (name === em || label === em) &&
+              (name === targetMetricName || label === targetMetricName)
+            );
+          });
+        }
+        return false;
+      });
+    },
+    [editableMetrics, metrics],
+  );
+
   const handleCellModification = useCallback(() => {
     // Trigger re-render when cell modifications change
     setForceUpdate(prev => prev + 1);
@@ -1859,9 +1891,17 @@ export const TableRenderer = React.memo(props => {
             typeof firstMetric === 'string' ? firstMetric : firstMetric.label; // Use display label
         }
 
-        const isEditableMetric =
-          Array.isArray(editableMetrics) &&
-          editableMetrics.includes(metricForEditCheck);
+        const isEditableMetric = checkIsEditableMetric(metricForEditCheck);
+
+        const isSubtotalOrGrandTotal = (() => {
+          if (rowAttrs.length === 0 && colKey.length === colAttrs.length) {
+            return false;
+          }
+          if (colAttrs.length === 0 && rowKey.length === rowAttrs.length) {
+            return false;
+          }
+          return agg.isSubtotal || agg.isGrandTotal;
+        })();
 
         const keys = [...rowKey, ...colKey];
         let backgroundColor;
@@ -1892,7 +1932,7 @@ export const TableRenderer = React.memo(props => {
 
         const cellStyle = {
           ...(agg.isSubtotal ? { fontWeight: 'bold' } : { backgroundColor }),
-          ...(isEditableMetric && !agg.isSubtotal && !agg.isGrandTotal
+          ...(isEditableMetric && !isSubtotalOrGrandTotal
             ? {
                 backgroundColor: isDarkMode ? '#2d2d14' : '#FFFBE6', // Dark olive for dark mode
                 position: 'relative',
@@ -1916,7 +1956,7 @@ export const TableRenderer = React.memo(props => {
             className={cellClassName}
             key={`pvtVal-${flatColKey}`}
             onClick={
-              isEditableMetric && !agg.isSubtotal && !agg.isGrandTotal
+              isEditableMetric && !isSubtotalOrGrandTotal
                 ? handleCellClick(rowKey, colKey, originalValue)
                 : rowClickHandlers[flatColKey]
             }
@@ -1925,8 +1965,7 @@ export const TableRenderer = React.memo(props => {
           >
             {isEditing &&
             isEditableMetric &&
-            !agg.isSubtotal &&
-            !agg.isGrandTotal ? (
+            !isSubtotalOrGrandTotal ? (
               <EditableCell
                 value={displayValue}
                 onSave={newValue =>
@@ -2373,16 +2412,30 @@ export const TableRenderer = React.memo(props => {
             typeof firstMetric === 'string' ? firstMetric : firstMetric.label;
         }
 
-        const isEditableMetric =
-          Array.isArray(editableMetrics) &&
-          editableMetrics.includes(metricForEditCheck);
+        const isEditableMetric = checkIsEditableMetric(metricForEditCheck);
+
+        // When rowAttrs.length === 0, the main value cells with full colKey are editable data cells
+        const isCellEditable =
+          isEditableMetric &&
+          (rowAttrs.length === 0 && colKey.length === colAttrs.length);
+
+        const isDarkMode = theme.colorBgBase
+          ? isColorDark(theme.colorBgBase)
+          : false;
 
         const cellStyle = {
           padding: `${theme.sizeUnit}px`,
+          position: 'relative', // Always relative positioning so absolute inputs anchor to this cell
+          ...(isCellEditable
+            ? {
+                backgroundColor: isDarkMode ? '#2d2d14' : '#FFFBE6', // Light yellow indicator for editable metric
+              }
+            : {}),
           ...(isModified
             ? {
-                backgroundColor: '#ffd149ff',
-                borderLeft: '3px solid #d48806',
+                backgroundColor: isDarkMode ? '#cfaf2fff' : '#ffd149ff',
+                borderLeft: `3px solid ${isDarkMode ? '#d48806' : '#d48806'}`,
+                color: isDarkMode ? '#ffffff' : undefined,
               }
             : {}),
         };
@@ -2393,17 +2446,14 @@ export const TableRenderer = React.memo(props => {
             className={`pvtTotal pvtRowTotal ${isModified ? 'modified-cell' : ''}`}
             key={`total-${flatColKey}`}
             onClick={
-              isEditableMetric && !agg.isSubtotal && !agg.isGrandTotal
+              isCellEditable
                 ? handleCellClick([], colKey, originalValue)
                 : colTotalCallbacks[flatColKey]
             }
             onContextMenu={e => onContextMenu(e, colKey, undefined)}
             style={cellStyle}
           >
-            {isEditing &&
-            isEditableMetric &&
-            !agg.isSubtotal &&
-            !agg.isGrandTotal ? (
+            {isEditing && isCellEditable ? (
               <EditableCell
                 value={displayValue}
                 onSave={newValue =>

@@ -55,18 +55,32 @@ export class PivotCellEditManager {
 
   setValue = (rowKey, colKey, originalValue, newValue) => {
     const getOriginalMetricName = displayLabel => {
-      const metric = this.metrics.find(m => {
-        if (typeof m === 'string') {
-          return m === displayLabel;
+      if (!displayLabel) return this.aggregatorName;
+      if (Array.isArray(this.metrics)) {
+        const metric = this.metrics.find(m => {
+          if (typeof m === 'string') {
+            return (
+              m === displayLabel ||
+              m.toLowerCase().trim() === String(displayLabel).toLowerCase().trim()
+            );
+          }
+          return (
+            m.label === displayLabel ||
+            m.metric_name === displayLabel ||
+            String(m.label).toLowerCase().trim() ===
+              String(displayLabel).toLowerCase().trim() ||
+            String(m.metric_name).toLowerCase().trim() ===
+              String(displayLabel).toLowerCase().trim()
+          );
+        });
+        if (metric) {
+          if (typeof metric !== 'string') {
+            return metric.column?.column_name || metric.metric_name || metric.label;
+          }
+          return metric;
         }
-        // Assuming AdhocMetric has a 'label' and potentially 'column.column_name'
-        return m.label === displayLabel;
-      });
-      // Return the original datasource column name if available, otherwise the metric string or label
-      if (metric && typeof metric !== 'string' && metric.column?.column_name) {
-        return metric.column.column_name;
       }
-      return typeof metric === 'string' ? metric : metric?.label;
+      return displayLabel;
     };
 
     const cellKey = this.getCellKey(rowKey, colKey);

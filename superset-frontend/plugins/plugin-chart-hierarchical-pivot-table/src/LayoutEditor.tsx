@@ -417,6 +417,35 @@ export default function LayoutEditor({
     [rowItems, colItems, selectedRowKeys, selectedColKeys],
   );
 
+  // Optimize column lookup to prioritize custom label over verbose_name and column_name
+  const columnMap = React.useMemo(() => {
+    const map = new Map<string, DatasourceColumn>();
+    if (Array.isArray(allColumns)) {
+      allColumns.forEach(c => {
+        if (c && c.column_name) {
+          map.set(c.column_name, c);
+        }
+      });
+    }
+    return map;
+  }, [allColumns]);
+
+  const getColumnText = useCallback(
+    (colName: string) => {
+      const col = columnMap.get(colName);
+      if (col) {
+        return (
+          (col as any).label ||
+          col.verbose_name ||
+          col.column_name ||
+          colName
+        );
+      }
+      return colName;
+    },
+    [columnMap],
+  );
+
   const toggleSelection = useCallback(
     (id: string, listType: 'rows' | 'cols') => {
       const targetSet = listType === 'rows' ? selectedRowKeys : selectedColKeys;
@@ -492,7 +521,7 @@ export default function LayoutEditor({
                         key={row}
                         index={index}
                         id={row}
-                        text={row}
+                        text={getColumnText(row)}
                         listType="rows"
                         isSelected={selectedRowKeys.has(row)}
                         moveCard={moveCard}
@@ -507,7 +536,7 @@ export default function LayoutEditor({
                         key={col}
                         index={index}
                         id={col}
-                        text={col}
+                        text={getColumnText(col)}
                         listType="cols"
                         isSelected={selectedColKeys.has(col)}
                         moveCard={moveCard}
