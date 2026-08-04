@@ -693,9 +693,9 @@ const config: ControlPanelConfig = {
             name: 'backendApiUrl',
             config: {
               type: 'TextControl',
-              label: t('BackendUrl'),
+              label: t('API Endpoint'),
               description: t(
-                'Full URL for the backend API (e.g., https://api.example.com/update/data)',
+                'Full URL for the cell edit API Endpoint (e.g., https://api.example.com/update/data)',
               ),
               default: '',
               renderTrigger: true,

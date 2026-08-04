@@ -42,4 +42,27 @@ describe('PivotCellEditManager', () => {
     await manager.sendModifications();
     expect(mockPost).toHaveBeenCalledWith('https://api.example.com/save', expect.any(Object));
   });
+
+  it('should trigger notification error when backendApiUrl is not configured', async () => {
+    const mockPost = jest.spyOn(axios, 'post').mockResolvedValue({ data: {} });
+    const notificationMock = { success: jest.fn(), info: jest.fn(), error: jest.fn() };
+    const manager = new PivotCellEditManager(
+      [],
+      [],
+      [],
+      'Sum',
+      ['metric1'],
+      '',
+      ['metric1'],
+      'datasource1',
+      notificationMock,
+    );
+    manager.setValue(['row1'], ['col1'], 10, 20);
+    const result = await manager.sendModifications();
+    expect(result).toBe(false);
+    expect(notificationMock.error).toHaveBeenCalledWith({
+      message: 'Please configure API Endpoint',
+    });
+    expect(mockPost).not.toHaveBeenCalled();
+  });
 });

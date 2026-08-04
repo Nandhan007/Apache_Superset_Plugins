@@ -181,7 +181,12 @@ export class PivotCellEditManager {
       console.warn(
         'Backend URL is not configured. Modifications will not be sent.',
       );
-      return;
+      if (this.notification) {
+        this.notification.error({
+          message: 'Please configure API Endpoint',
+        });
+      }
+      return false;
     }
 
     if (this.modifications.size === 0) {

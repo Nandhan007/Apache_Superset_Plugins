@@ -36,7 +36,26 @@ describe('CellEditManager', () => {
     );
     // Add a modification
     manager.setValue(0, 'metric1', 10, 20, { dim1: 'val1', metric1: 10 });
-    await manager.sendModifications();
     expect(mockPost).toHaveBeenCalledWith('https://api.example.com/save', expect.any(Object));
+  });
+
+  it('should trigger notification error when backendApiUrl is not configured', async () => {
+    const mockPost = jest.spyOn(axios, 'post').mockResolvedValue({ data: {} });
+    const notificationMock = { success: jest.fn(), info: jest.fn(), error: jest.fn() };
+    const manager = new CellEditManager(
+      [],
+      '',
+      ['metric1'],
+      notificationMock,
+      'datasource1',
+      ['dim1'],
+    );
+    manager.setValue(0, 'metric1', 10, 20, { dim1: 'val1', metric1: 10 });
+    const result = await manager.sendModifications();
+    expect(result).toBe(false);
+    expect(notificationMock.error).toHaveBeenCalledWith({
+      message: 'Please configure API Endpoint',
+    });
+    expect(mockPost).not.toHaveBeenCalled();
   });
 });

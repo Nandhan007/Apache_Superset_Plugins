@@ -168,7 +168,12 @@ export class CellEditManager {
     const trimmedUrl = this.backendApiUrl?.trim();
     if (!trimmedUrl) {
       console.warn('Backend URL is not configured.');
-      return;
+      if (this.notification) {
+        this.notification.error({
+          message: 'Please configure API Endpoint',
+        });
+      }
+      return false;
     }
 
     if (this.modifications.size === 0) {
