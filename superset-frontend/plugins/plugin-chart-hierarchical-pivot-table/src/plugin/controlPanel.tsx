@@ -40,6 +40,7 @@ import ChartLevelActionsControl from '../components/ChartLevelActionsControl';
 import RowLevelActionsControl from '../components/RowLevelActionsControl';
 import HTMLViewerActionsControl from '../components/HTMLViewerActionsControl';
 import RedirectionConfigControl from '../components/RedirectionConfigControl';
+import ApiEndpointSelectControl from '../components/ApiEndpointSelectControl';
 
 function parseExpressionJson(expression: string, colName?: string): any {
   if (!expression) return null;
@@ -49,6 +50,10 @@ function parseExpressionJson(expression: string, colName?: string): any {
   const firstObject = cleanExpr.indexOf('{');
   const lastArray = cleanExpr.lastIndexOf(']');
   const lastObject = cleanExpr.lastIndexOf('}');
+
+  if (firstArray === -1 && firstObject === -1) {
+    return null;
+  }
 
   let startIdx = -1;
   let endIdx = -1;
@@ -66,6 +71,7 @@ function parseExpressionJson(expression: string, colName?: string): any {
       notification.error({
         key: `hierarchy_json_err_${colName}`,
         message: 'Hierarchy Field Invalid',
+        description: `Failed to find JSON boundaries for column "${colName}"`,
         duration: 5,
       });
     }
@@ -103,6 +109,7 @@ function parseExpressionJson(expression: string, colName?: string): any {
         notification.error({
           key: `hierarchy_json_err_${colName}`,
           message: 'Hierarchy Field Invalid',
+          description: `Failed to parse JSON for column "${colName}": ${e.message}`,
           duration: 5,
         });
       }
@@ -116,6 +123,7 @@ function validateHierarchyJson(parsed: any, colName: string): void {
     notification.error({
       key: `hierarchy_struct_err_${colName}`,
       message: 'Hierarchy Field Invalid',
+      description: `Parsed hierarchy configuration for "${colName}" is empty or null`,
       duration: 5,
     });
     return;
@@ -125,6 +133,7 @@ function validateHierarchyJson(parsed: any, colName: string): void {
     notification.error({
       key: `hierarchy_struct_err_${colName}`,
       message: 'Hierarchy Field Invalid',
+      description: `Hierarchy items list for "${colName}" is empty`,
       duration: 5,
     });
     return;
@@ -133,8 +142,9 @@ function validateHierarchyJson(parsed: any, colName: string): void {
     const item = items[i];
     if (typeof item !== 'object' || item === null) {
       notification.error({
-        key: `hierarchy_struct_err_${colName}`,
+        key: `hierarchy_struct_err_${colName}_${i}`,
         message: 'Hierarchy Field Invalid',
+        description: `Hierarchy item at index ${i} for "${colName}" is not an object`,
         duration: 5,
       });
       continue;
@@ -144,17 +154,91 @@ function validateHierarchyJson(parsed: any, colName: string): void {
     if (!item.fieldName && item.field_name) item.fieldName = item.field_name;
     if (!item.fieldLabel && item.field_label) item.fieldLabel = item.field_label;
     if (!item.hierarchyGroup && item.hierarchy_group) item.hierarchyGroup = item.hierarchy_group;
+    if (!item.parentField && item.parent_field) item.parentField = item.parent_field;
+    if (!item.filterColumns) {
+      item.filterColumns =
+        item.filter_columns || item.filterColumn || item.filter_column;
+    }
 
     if (!item.columnName || !item.fieldName) {
       notification.error({
-        key: `hierarchy_struct_err_${colName}`,
+        key: `hierarchy_struct_err_${colName}_${item.fieldName || i}`,
         message: 'Hierarchy Field Invalid',
+        description: `Item "${item.fieldName || item.columnName || i}" in "${colName}" is missing columnName or fieldName`,
         duration: 5,
       });
     }
 
     if (!item.hierarchyGroup) item.hierarchyGroup = colName || 'Default';
   }
+
+  const groupMap = new Map<string, any[]>();
+  items.forEach(item => {
+    if (item && typeof item === 'object') {
+      const grpName = item.hierarchyGroup || colName || 'Default';
+      if (!groupMap.has(grpName)) {
+        groupMap.set(grpName, []);
+      }
+      groupMap.get(grpName)!.push(item);
+    }
+  });
+
+  groupMap.forEach((groupItems, grpName) => {
+    const hasParent = (it: any) => {
+      const parent = it.parentField || it.parent_field;
+      if (!parent) return false;
+      if (Array.isArray(parent))
+        return parent.length > 0 && Boolean(parent[0]);
+      if (typeof parent === 'string')
+        return parent.trim().length > 0;
+      return true;
+    };
+
+    const hasFilterCols = (it: any) => {
+      const filterCols =
+        it.filterColumns ||
+        it.filterColumn ||
+        it.filter_columns ||
+        it.filter_column;
+      if (!filterCols) return false;
+      if (Array.isArray(filterCols)) return filterCols.length > 0;
+      if (typeof filterCols === 'string')
+        return filterCols.trim().length > 0;
+      if (typeof filterCols === 'object')
+        return Object.keys(filterCols).length > 0;
+      return false;
+    };
+
+    const rootFields = groupItems.filter(
+      it => !hasParent(it) || it.level === 1,
+    );
+
+    if (groupItems.length > 1 && rootFields.length !== 1) {
+      notification.error({
+        key: `hierarchy_struct_err_${colName}_${grpName}_root`,
+        message: 'Hierarchy Field Invalid',
+        description: `Group "${grpName}" must have exactly 1 root field (found ${rootFields.length})`,
+        duration: 5,
+      });
+    }
+
+    groupItems.forEach(it => {
+      const isChild =
+        hasParent(it) ||
+        (it.level && it.level >= 2) ||
+        (groupItems.length > 1 && rootFields.length === 1 && rootFields[0] !== it);
+      if (isChild) {
+        if (!hasParent(it) || !hasFilterCols(it)) {
+          notification.error({
+            key: `hierarchy_struct_err_${colName}_${grpName}_${it.fieldName || it.columnName}`,
+            message: 'Hierarchy Field Invalid',
+            description: `Child field "${it.fieldName || it.columnName}" in group "${grpName}" requires parentField and filterColumns`,
+            duration: 5,
+          });
+        }
+      }
+    });
+  });
 }
 
 function findColDef(allCols: any[], name: string): any {
@@ -584,7 +668,6 @@ const config: ControlPanelConfig = {
                       try {
                         const parsed = parseExpressionJson(expression, colNameStr);
                         if (parsed) {
-                          validateHierarchyJson(parsed, colNameStr);
                           if (Array.isArray(parsed)) {
                             hierarchyFieldsList.push(...parsed);
                           } else {
@@ -609,6 +692,9 @@ const config: ControlPanelConfig = {
                   }
                   return false;
                 });
+                if (hierarchyFields.length > 0) {
+                  validateHierarchyJson(hierarchyFields, 'Hierarchy');
+                }
                 return {
                   datasourceColumns: validColumns,
                   allColumns: allColumns,
@@ -762,10 +848,10 @@ const config: ControlPanelConfig = {
           {
             name: 'backendApiUrl',
             config: {
-              type: 'TextControl',
+              type: ApiEndpointSelectControl,
               label: t('API Endpoint'),
               description: t(
-                'Full URL for the API Endpoint (e.g., https://api.example.com/update/data)',
+                'API Endpoint route for processing cell edits (fetched from /MFP/MFP/getApi_route)',
               ),
               default: '',
               renderTrigger: true,
@@ -1229,7 +1315,7 @@ const config: ControlPanelConfig = {
             name: 'excludeOptionFilter',
             config: {
               type: 'CheckboxControl',
-              label: t('Exclude Global Filter'),
+              label: t('Exclude Filter'),
               renderTrigger: true,
               default: false,
               description: t(

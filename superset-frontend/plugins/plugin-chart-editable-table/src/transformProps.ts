@@ -55,6 +55,10 @@ function parseExpressionJson(expression: string, colName?: string): any {
   const lastArray = cleanExpr.lastIndexOf(']');
   const lastObject = cleanExpr.lastIndexOf('}');
 
+  if (firstArray === -1 && firstObject === -1) {
+    return null;
+  }
+
   let startIdx = -1;
   let endIdx = -1;
 
@@ -686,21 +690,6 @@ const transformProps = (
   const datasourceColumns = (chartProps.datasource as any)?.columns || [];
   const hierarchyFieldsList: HierarchyFieldConfig[] = [];
 
-  function validateHierarchyJson(parsed: any, colName: string): void {
-    if (parsed === null || parsed === undefined) return;
-    const items = Array.isArray(parsed) ? parsed : [parsed];
-    for (let i = 0; i < items.length; i += 1) {
-      const item = items[i];
-      if (typeof item !== 'object' || item === null) continue;
-
-      if (!item.columnName && item.column_name) item.columnName = item.column_name;
-      if (!item.fieldName && item.field_name) item.fieldName = item.field_name;
-      if (!item.fieldLabel && item.field_label) item.fieldLabel = item.field_label;
-      if (!item.hierarchyGroup && item.hierarchy_group) item.hierarchyGroup = item.hierarchy_group;
-      if (!item.hierarchyGroup) item.hierarchyGroup = colName || 'Default';
-    }
-  }
-
   const validationErrors: string[] = [];
 
   selectedHierarchyColumns.forEach((colName: any) => {
@@ -742,7 +731,6 @@ const transformProps = (
     }
 
     try {
-      validateHierarchyJson(parsed, String(colNameStr));
       if (Array.isArray(parsed)) {
         hierarchyFieldsList.push(...parsed);
       } else {
@@ -750,7 +738,7 @@ const transformProps = (
       }
     } catch (e: any) {
       console.warn(
-        `Hierarchy validation warning for "${colNameStr}":`,
+        `Hierarchy JSON push warning for "${colNameStr}":`,
         e.message,
       );
     }

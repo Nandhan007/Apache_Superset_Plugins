@@ -8,6 +8,8 @@ import {
   InputNumber,
   Checkbox,
   Upload,
+  Row,
+  Col,
 } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { SupersetClient } from '@superset-ui/core';
@@ -775,6 +777,49 @@ export default function SupersetDataForm({
     );
   };
 
+  const renderFormFields = () => {
+    const rows: Array<Array<{ fieldName: string; span: number }>> = [];
+    let currentRow: Array<{ fieldName: string; span: number }> = [];
+
+    formFields.forEach(fieldName => {
+      const additionalConfig = getAdditionalConfig(fieldName);
+      const isFullWidth =
+        additionalConfig?.type === 'textarea' ||
+        additionalConfig?.type === 'file' ||
+        fieldName === 'comments';
+
+      const span = isFullWidth ? 24 : 12;
+
+      if (span === 24) {
+        if (currentRow.length > 0) {
+          rows.push(currentRow);
+          currentRow = [];
+        }
+        rows.push([{ fieldName, span: 24 }]);
+      } else {
+        currentRow.push({ fieldName, span: 12 });
+        if (currentRow.length === 2) {
+          rows.push(currentRow);
+          currentRow = [];
+        }
+      }
+    });
+
+    if (currentRow.length > 0) {
+      rows.push(currentRow);
+    }
+
+    return rows.map((rowItems, rowIndex) => (
+      <Row key={`form-row-${rowIndex}`} gutter={16}>
+        {rowItems.map(item => (
+          <Col key={item.fieldName} span={item.span}>
+            {renderField(item.fieldName)}
+          </Col>
+        ))}
+      </Row>
+    ));
+  };
+
   return (
     <Form
       form={form}
@@ -791,7 +836,7 @@ export default function SupersetDataForm({
         />
       )}
 
-      {formFields.map(fieldName => renderField(fieldName))}
+      {renderFormFields()}
 
       <Form.Item>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

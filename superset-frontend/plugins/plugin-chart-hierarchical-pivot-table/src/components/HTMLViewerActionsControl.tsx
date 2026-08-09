@@ -17,7 +17,7 @@
  * under the License.
  */
 import { useState } from 'react';
-import { Button, List, Modal, Form, Input, Select, Checkbox } from 'antd';
+import { Button, List, Modal, Form, Input, Select, Checkbox, Row, Col } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { t } from '@apache-superset/core/translation';
 import * as AntdIcons from '@ant-design/icons';
@@ -164,29 +164,36 @@ export default function HTMLViewerActionsControl({
         width={800}
       >
         <Form form={form} layout="vertical">
-          <Form.Item
-            name="buttonLabel"
-            label={t('Button Label')}
-            rules={[{ required: false }]}
-          >
-            <Input placeholder="e.g. View Details" />
-          </Form.Item>
-          <Form.Item
-            name="buttonIcon"
-            label={t('Icon Name')}
-            rules={[{ required: true }]}
-          >
-            <Select
-              showSearch
-              placeholder="Select an icon"
-              options={iconOptions}
-              filterOption={(input, option) =>
-                (option?.value as string)
-                  .toLowerCase()
-                  .includes(input.toLowerCase())
-              }
-            />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="buttonLabel"
+                label={t('Button Label')}
+                rules={[{ required: false }]}
+              >
+                <Input placeholder="e.g. View Details" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="buttonIcon"
+                label={t('Icon Name')}
+                rules={[{ required: true }]}
+              >
+                <Select
+                  showSearch
+                  placeholder="Select an icon"
+                  options={iconOptions}
+                  filterOption={(input, option) =>
+                    (option?.value as string)
+                      .toLowerCase()
+                      .includes(input.toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
           <Form.Item
             name="modalTitle"
             label={t('Modal Title')}
@@ -240,51 +247,56 @@ export default function HTMLViewerActionsControl({
             }
           </Form.Item>
 
-          <Form.Item
-            name="handlebarsTemplate"
-            label={t('HTML / Handlebars Template')}
-            rules={[{ required: true }]}
-          >
-            <AceEditor
-              mode="html"
-              theme="github"
-              name="action-html-template-editor"
-              width="100%"
-              height="250px"
-              style={{ border: '1px solid #d9d9d9', borderRadius: '4px' }}
-              fontSize={14}
-              showPrintMargin={false}
-              wrapEnabled
-              highlightActiveLine
-              tabSize={2}
-              setOptions={{
-                showLineNumbers: true,
-                showGutter: true,
-                useWorker: false,
-              }}
-            />
-          </Form.Item>
-
-          <Form.Item name="styleTemplate" label={t('Custom CSS / Styles')}>
-            <AceEditor
-              mode="css"
-              theme="github"
-              name="action-style-template-editor"
-              width="100%"
-              height="150px"
-              style={{ border: '1px solid #d9d9d9', borderRadius: '4px' }}
-              fontSize={14}
-              showPrintMargin={false}
-              wrapEnabled
-              highlightActiveLine
-              tabSize={2}
-              setOptions={{
-                showLineNumbers: true,
-                showGutter: true,
-                useWorker: false,
-              }}
-            />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="handlebarsTemplate"
+                label={t('HTML / Handlebars Template')}
+                rules={[{ required: true }]}
+              >
+                <AceEditor
+                  mode="html"
+                  theme="github"
+                  name="action-html-template-editor"
+                  width="100%"
+                  height="200px"
+                  style={{ border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                  fontSize={14}
+                  showPrintMargin={false}
+                  wrapEnabled
+                  highlightActiveLine
+                  tabSize={2}
+                  setOptions={{
+                    showLineNumbers: true,
+                    showGutter: true,
+                    useWorker: false,
+                  }}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="styleTemplate" label={t('Custom CSS / Styles')}>
+                <AceEditor
+                  mode="css"
+                  theme="github"
+                  name="action-style-template-editor"
+                  width="100%"
+                  height="200px"
+                  style={{ border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                  fontSize={14}
+                  showPrintMargin={false}
+                  wrapEnabled
+                  highlightActiveLine
+                  tabSize={2}
+                  setOptions={{
+                    showLineNumbers: true,
+                    showGutter: true,
+                    useWorker: false,
+                  }}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </div>

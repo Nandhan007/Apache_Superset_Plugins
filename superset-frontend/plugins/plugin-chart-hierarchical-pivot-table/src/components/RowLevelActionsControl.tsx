@@ -15,6 +15,7 @@ import {
   AdditionalFieldConfig,
 } from '../types/hierarchy';
 import AdditionalFieldsList from './AdditionalFieldsList';
+import ApiEndpointSelectControl from './ApiEndpointSelectControl';
 
 interface RowLevelActionsControlProps {
   value?: RowLevelActionConfig[];
@@ -231,44 +232,56 @@ export default function RowLevelActionsControl({
         width={800}
       >
         <Form form={form} layout="vertical">
-          <Form.Item
-            name="buttonLabel"
-            label={t('Button Label')}
-            rules={[{ required: true }]}
-          >
-            <Input placeholder="e.g. Approve" />
-          </Form.Item>
-          <Form.Item
-            name="buttonIcon"
-            label={t('Icon Name')}
-            rules={[{ required: true }]}
-          >
-            <Select
-              showSearch
-              placeholder="Select an icon"
-              options={iconOptions}
-              filterOption={(input, option) =>
-                (option?.value as string)
-                  .toLowerCase()
-                  .includes(input.toLowerCase())
-              }
-            />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="buttonLabel"
+                label={t('Button Label')}
+                rules={[{ required: true }]}
+              >
+                <Input placeholder="e.g. Approve" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="buttonIcon"
+                label={t('Icon Name')}
+                rules={[{ required: true }]}
+              >
+                <Select
+                  showSearch
+                  placeholder="Select an icon"
+                  options={iconOptions}
+                  filterOption={(input, option) =>
+                    (option?.value as string)
+                      .toLowerCase()
+                      .includes(input.toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+          </Row>
 
-          <Form.Item
-            name="modalTitle"
-            label={t('Modal Title')}
-            rules={[{ required: true }]}
-          >
-            <Input placeholder="e.g. Approve Entry" />
-          </Form.Item>
-          <Form.Item
-            name="apiEndpoint"
-            label={t('API Endpoint')}
-            rules={[{ required: true }]}
-          >
-            <Input placeholder="e.g. /api/v1/planning/approve OR https://api.exa.com/v1/approve" />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="modalTitle"
+                label={t('Modal Title')}
+                rules={[{ required: true }]}
+              >
+                <Input placeholder="e.g. Approve Entry" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="apiEndpoint"
+                label={t('API Endpoint')}
+                rules={[{ required: true }]}
+              >
+                <ApiEndpointSelectControl />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Form.Item name="additionalFields" label={t('Form Fields')}>
             <AdditionalFieldsList
@@ -304,7 +317,7 @@ export default function RowLevelActionsControl({
                   theme="github"
                   name="row-action-payload-mapping-editor"
                   width="100%"
-                  height="126px"
+                  height="128px"
                   style={{ border: '1px solid #d9d9d9', borderRadius: '4px' }}
                   fontSize={14}
                   showPrintMargin={false}
@@ -321,23 +334,7 @@ export default function RowLevelActionsControl({
               </Form.Item>
             </Col>
             <Col span={12}>
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  height: '100%',
-                }}
-              >
-                <div
-                  style={{
-                    fontWeight: 'normal',
-                    height: '22px',
-                    marginBottom: '8px',
-                    color: '#333',
-                  }}
-                >
-                  {t('Input Payload Structure Preview')}
-                </div>
+              <Form.Item label={t('Input Payload Structure Preview')}>
                 <div
                   style={{
                     fontSize: '12px',
@@ -345,8 +342,9 @@ export default function RowLevelActionsControl({
                     background: '#fafafa',
                     padding: '12px',
                     borderRadius: '4px',
-                    border: '1px solid #f0f0f0',
-                    height: '126px',
+                    border: '1px solid #d9d9d9',
+                    height: '128px',
+                    boxSizing: 'border-box',
                     display: 'flex',
                     flexDirection: 'column',
                     overflow: 'auto',
@@ -477,7 +475,7 @@ export default function RowLevelActionsControl({
                     }}
                   </Form.Item>
                 </div>
-              </div>
+              </Form.Item>
             </Col>
           </Row>
         </Form>
