@@ -50,7 +50,7 @@ export default function ApiEndpointSelectControl({
         let data: any[] = [];
         try {
           const res = await SupersetClient.get({
-            endpoint: '/MFP/MFP/getApi_route',
+            endpoint: '/api/openl/MFP/MFP/getApi_route',
           });
           const rawJson = res.json as any;
           if (Array.isArray(rawJson)) {
@@ -61,7 +61,7 @@ export default function ApiEndpointSelectControl({
             data = [rawJson];
           }
         } catch (_err) {
-          const res = await axios.get('/MFP/MFP/getApi_route');
+          const res = await axios.get('/api/openl/MFP/MFP/getApi_route');
           const rawData = res.data;
           data = Array.isArray(rawData) ? rawData : (rawData?.data || []);
         }
@@ -77,7 +77,7 @@ export default function ApiEndpointSelectControl({
         }
       } catch (err) {
         console.warn(
-          'Failed to fetch API routes from /MFP/MFP/getApi_route:',
+          'Failed to fetch API routes from /api/openl/MFP/MFP/getApi_route:',
           err,
         );
         if (isMounted) {

@@ -2824,10 +2824,16 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
                     (currentAction.additionalFields || []).some(
                       f =>
                         f.type === 'hierarchy' &&
-                        (Array.isArray(f.name)
+                        ((Array.isArray(f.name)
                           ? f.name.includes(h.fieldName) ||
                             f.name.includes(h.columnName)
-                          : f.name === h.fieldName || f.name === h.columnName),
+                          : f.name === h.fieldName || f.name === h.columnName) ||
+                         (f.hierarchyGroup &&
+                          (h.hierarchyGroup || (h as any).hierarchy_group) &&
+                          f.hierarchyGroup.toLowerCase().trim() ===
+                            (h.hierarchyGroup || (h as any).hierarchy_group)
+                              .toLowerCase()
+                              .trim())),
                     ),
                 )}
                 formFields={[
@@ -2843,6 +2849,7 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
                 onSubmit={handleFormSubmit}
                 onCancel={handleCloseModal}
                 datasourceId={datasourceId ? Number(datasourceId) : 0}
+                datasourceType={datasourceType}
                 rowData={currentRow}
                 initialValues={currentRow}
                 data={data}

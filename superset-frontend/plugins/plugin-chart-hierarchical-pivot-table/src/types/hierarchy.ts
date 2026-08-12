@@ -97,6 +97,7 @@ export interface SupersetDataFormProps {
   onCancel?: () => void;
   initialValues?: Record<string, any>;
   datasourceId: number;
+  datasourceType?: string;
   chartId?: number;
   rowData?: Record<string, any>; // For row-level actions
   data?: Record<string, any>[]; // Current chart data for local option fetching

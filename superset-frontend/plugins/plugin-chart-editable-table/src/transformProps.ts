@@ -138,7 +138,7 @@ function findColumnExpression(
 
   const colNameStr =
     typeof colName === 'object' && colName !== null
-      ? colName.column_name || colName.label || colName.columnName
+      ? colName.column_name || colName.label || colName.columnName || colName.optionName
       : String(colName);
 
   if (!colNameStr) return undefined;
@@ -150,14 +150,31 @@ function findColumnExpression(
     }
   }
 
+  const hierarchyColumnsList = ensureIsArray(formData?.hierarchyColumns);
+  for (const hCol of hierarchyColumnsList) {
+    if (typeof hCol === 'object' && hCol !== null) {
+      const name = hCol.column_name || hCol.label || hCol.columnName || hCol.optionName;
+      if (name && String(name).toLowerCase() === colNameStr.toLowerCase()) {
+        const expr = hCol.expression || hCol.sqlExpression || hCol.sql_expression || hCol.sql;
+        if (expr) return expr;
+      }
+    }
+  }
+
   if (Array.isArray(allColumns)) {
     const target = colNameStr.toLowerCase().trim();
     const found = allColumns.find((c: any) => {
       if (!c) return false;
-      const cName = String(c.column_name || '').toLowerCase().trim();
+      const cName = String(c.column_name || c.columnName || '').toLowerCase().trim();
       const cLabel = String(c.label || '').toLowerCase().trim();
       const cVerbose = String(c.verbose_name || '').toLowerCase().trim();
-      return cName === target || cLabel === target || cVerbose === target;
+      const cOpt = String(c.optionName || '').toLowerCase().trim();
+      return (
+        (cName && cName === target) ||
+        (cLabel && cLabel === target) ||
+        (cVerbose && cVerbose === target) ||
+        (cOpt && cOpt === target)
+      );
     });
 
     if (found) {
@@ -745,16 +762,24 @@ const transformProps = (
   });
 
   const seen = new Set<string>();
-  const hierarchyFields = hierarchyFieldsList.filter(item => {
-    const group = item.hierarchyGroup || (item as any).hierarchy_group || '';
-    const name = item.fieldName || item.columnName;
-    const key = `${group}:${name}`;
-    if (name && !seen.has(key)) {
-      seen.add(key);
-      return true;
-    }
-    return false;
-  });
+  const seenFieldNames = new Set<string>();
+  const hierarchyFields = hierarchyFieldsList
+    .map(item => ({
+      ...item,
+      hierarchyGroup:
+        item.hierarchyGroup || (item as any).hierarchy_group || '',
+    }))
+    .filter(item => {
+      const group = item.hierarchyGroup;
+      const name = item.fieldName || item.columnName;
+      const key = `${group}:${name}`;
+      if (name && !seen.has(key)) {
+        seen.add(key);
+        seenFieldNames.add(name);
+        return true;
+      }
+      return false;
+    });
 
   const allActions = [
     ...(chartLevelActions || []),
@@ -787,8 +812,26 @@ const transformProps = (
     fieldGroups.forEach(group => {
       let prevFieldName: string | null = null;
       group.forEach((fName, idx) => {
-        if (fName && !seen.has(fName)) {
-          seen.add(fName);
+        const existing = hierarchyFields.find(
+          h => h.fieldName === fName || h.columnName === fName,
+        );
+
+        if (fName && !existing && !seenFieldNames.has(fName)) {
+          seenFieldNames.add(fName);
+
+          const matchedAdditionalField = Array.isArray(action.additionalFields)
+            ? action.additionalFields.find(
+                (af: any) =>
+                  af &&
+                  (af.name === fName ||
+                    (Array.isArray(af.name) && af.name.includes(fName))),
+              )
+            : undefined;
+
+          const groupName =
+            matchedAdditionalField?.hierarchyGroup ||
+            (group.length > 0 ? 'DefaultGroup' : 'ActionHierarchy');
+
           hierarchyFields.push({
             level: idx + 1,
             fieldName: fName,
@@ -796,14 +839,17 @@ const transformProps = (
             columnName: fName,
             parentField: prevFieldName,
             filterColumn: fName,
-            hierarchyGroup: 'ActionHierarchy',
+            hierarchyGroup: groupName,
           } as any);
         }
+
         if (fName) {
-          const existing = hierarchyFields.find(
-            h => h.fieldName === fName || h.columnName === fName,
-          );
-          prevFieldName = existing ? existing.fieldName : fName;
+          const activeItem =
+            existing ||
+            hierarchyFields.find(
+              h => h.fieldName === fName || h.columnName === fName,
+            );
+          prevFieldName = activeItem ? activeItem.fieldName : fName;
         }
       });
     });
@@ -1074,7 +1120,15 @@ const transformProps = (
     backendApiUrl: formData.backendApiUrl,
     editableMetrics: formData.editableMetrics,
     datasource: (chartProps.datasource as { tableName?: string })?.tableName,
-    datasourceId: (chartProps.datasource as { id?: number })?.id,
+    datasourceId: (() => {
+      const rawDs = (chartProps.datasource as any)?.id || originalFormData?.datasource || formData?.datasource;
+      if (typeof rawDs === 'number' && !isNaN(rawDs)) return rawDs;
+      if (typeof rawDs === 'string') {
+        const num = parseInt(rawDs.split('__')[0], 10);
+        if (!isNaN(num)) return num;
+      }
+      return 0;
+    })(),
     datasourceType: (chartProps.datasource as { type?: string })?.type,
     allColumns: (
       chartProps.datasource as {

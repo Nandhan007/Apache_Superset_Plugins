@@ -17,7 +17,7 @@
  * under the License.
  */
 import { useState } from 'react';
-import { Button, List, Modal, Form, Input, Checkbox, Select } from 'antd';
+import { Button, List, Modal, Form, Input, Checkbox, Select, notification } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { t } from '@apache-superset/core/translation';
 import { RedirectConfig, DatasourceColumn } from '../types';
@@ -62,6 +62,31 @@ export default function RedirectionConfigControl({
 
   const handleOk = () => {
     form.validateFields().then(values => {
+      const trimmedLabel = String(values.label || '').trim();
+
+      const isDuplicateLabel = value.some(
+        (item: any, idx: number) =>
+          idx !== editingIndex &&
+          String(item.label || '').toLowerCase().trim() ===
+            trimmedLabel.toLowerCase(),
+      );
+
+      if (isDuplicateLabel) {
+        form.setFields([
+          {
+            name: 'label',
+            errors: [t('A redirection with this name already exists')],
+          },
+        ]);
+        notification.error({
+          message: t('Duplicate Redirection Name'),
+          description: t(
+            `Redirection name "${trimmedLabel}" already exists. Redirection names must be unique.`,
+          ),
+        });
+        return;
+      }
+
       const config: RedirectConfig = {
         label: values.label,
         url: values.url,

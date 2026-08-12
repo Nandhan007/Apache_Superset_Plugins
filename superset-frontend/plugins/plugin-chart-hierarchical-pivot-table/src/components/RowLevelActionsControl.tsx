@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, List, Modal, Form, Input, Select, Row, Col } from 'antd';
+import { Button, List, Modal, Form, Input, Select, Row, Col, notification } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { t } from '@apache-superset/core/translation';
 import * as AntdIcons from '@ant-design/icons';
@@ -65,12 +65,52 @@ export default function RowLevelActionsControl({
 
   const handleOk = () => {
     form.validateFields().then(values => {
-      // Merge fields back logic is tricky because now we have typed additional fields vs dataset fields.
-      // We should store them separately in the config as planned: `datasetFields` and `additionalFields`.
-      // The `formFields` prop in RowLevelActionConfig should ideally be deprecated or just contain the dataset fields + names of additional fields?
-      // Let's stick to the new structure: `datasetFields` and `additionalFields`.
+      const trimmedLabel = String(values.buttonLabel || '').trim();
+
+      const isDuplicateLabel = value.some(
+        (item: any, idx: number) =>
+          idx !== editingIndex &&
+          String(item.buttonLabel || '').toLowerCase().trim() ===
+            trimmedLabel.toLowerCase(),
+      );
+
+      if (isDuplicateLabel) {
+        form.setFields([
+          {
+            name: 'buttonLabel',
+            errors: [t('An action button with this label already exists')],
+          },
+        ]);
+        notification.error({
+          message: t('Duplicate Action Name'),
+          description: t(
+            `Action button name "${trimmedLabel}" already exists. Action names must be unique.`,
+          ),
+        });
+        return;
+      }
 
       const additionalFieldsList = values.additionalFields || [];
+
+      if (Array.isArray(additionalFieldsList)) {
+        const fieldNames = additionalFieldsList.flatMap((f: any) =>
+          Array.isArray(f.name) ? f.name : [f.name],
+        ).filter(Boolean);
+        const seenNames = new Set<string>();
+        for (const name of fieldNames) {
+          const lower = String(name).toLowerCase().trim();
+          if (seenNames.has(lower)) {
+            notification.error({
+              message: t('Duplicate Form Field Name'),
+              description: t(
+                `Field name "${name}" is duplicated in form configuration. Field names must be unique.`,
+              ),
+            });
+            return;
+          }
+          seenNames.add(lower);
+        }
+      }
       if (Array.isArray(additionalFieldsList) && Array.isArray(hierarchyFields)) {
         const allFormNames = additionalFieldsList.flatMap((f: any) =>
           Array.isArray(f.name) ? f.name : [f.name],
@@ -80,12 +120,23 @@ export default function RowLevelActionsControl({
             const fieldNames = Array.isArray(f.name) ? f.name : [f.name];
             const candidate = hierarchyFields.find((hf: any) => {
               const nameMatches = fieldNames.includes(hf.fieldName) || fieldNames.includes(hf.columnName);
-              if (!nameMatches || !hf.parentField) return false;
-              const parent = Array.isArray(hf.parentField) ? hf.parentField[0] : hf.parentField;
-              return allFormNames.includes(parent);
+              if (!nameMatches) return false;
+              const grp = hf.hierarchyGroup || (hf as any).hierarchy_group;
+              return hierarchyFields.some((other: any) => {
+                const otherGrp = other.hierarchyGroup || (other as any).hierarchy_group;
+                const otherName = other.fieldName || other.columnName;
+                return (
+                  otherGrp === grp &&
+                  !fieldNames.includes(otherName) &&
+                  allFormNames.includes(otherName)
+                );
+              });
             });
-            if (candidate) {
-              const grp = candidate.hierarchyGroup || (candidate as any).hierarchy_group;
+            const fallbackCandidate = candidate || hierarchyFields.find((hf: any) =>
+              fieldNames.includes(hf.fieldName) || fieldNames.includes(hf.columnName),
+            );
+            if (fallbackCandidate) {
+              const grp = fallbackCandidate.hierarchyGroup || (fallbackCandidate as any).hierarchy_group;
               if (grp) {
                 additionalFieldsList[idx] = { ...f, hierarchyGroup: grp };
               }

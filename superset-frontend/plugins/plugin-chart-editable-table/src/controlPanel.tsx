@@ -701,7 +701,7 @@ const config: ControlPanelConfig = {
       ],
     },
     {
-      label: t('Edit Chart Options'),
+      label: t('Options'),
       tabOverride: 'data',
       expanded: true,
       controlSetRows: [
@@ -1679,31 +1679,36 @@ const config: ControlPanelConfig = {
     ensureIsArray(formData.hierarchyColumns).forEach((col: any) => {
       const colNameStr =
         typeof col === 'object' && col !== null
-          ? col.column_name || col.label || col.columnName
+          ? col.column_name || col.label || col.columnName || col.optionName
           : String(col);
 
       if (!colNameStr || seenNames.has(colNameStr)) return;
       seenNames.add(colNameStr);
 
-      if (typeof col === 'object' && col !== null) {
-        const expr =
-          col.expression ||
-          col.sqlExpression ||
-          col.sql_expression ||
-          col.sql ||
-          hierarchyColumnDefs[colNameStr];
-        if (expr) {
-          hierarchyColumnDefs[colNameStr] = expr;
-          hierarchyColumns.push({
-            ...col,
-            column_name: colNameStr,
-            label: col.label || colNameStr,
-            expression: expr,
-          });
-          return;
-        }
+      const expr =
+        (typeof col === 'object' && col !== null
+          ? col.expression || col.sqlExpression || col.sql_expression || col.sql
+          : undefined) || hierarchyColumnDefs[colNameStr];
+
+      if (expr) {
+        hierarchyColumnDefs[colNameStr] = expr;
+        hierarchyColumns.push(
+          typeof col === 'object' && col !== null
+            ? {
+                ...col,
+                column_name: colNameStr,
+                label: col.label || colNameStr,
+                expression: expr,
+              }
+            : {
+                column_name: colNameStr,
+                label: colNameStr,
+                expression: expr,
+              },
+        );
+      } else {
+        hierarchyColumns.push(col);
       }
-      hierarchyColumns.push(col);
     });
 
     return {

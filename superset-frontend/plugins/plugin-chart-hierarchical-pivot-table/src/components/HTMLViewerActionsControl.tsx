@@ -17,7 +17,7 @@
  * under the License.
  */
 import { useState } from 'react';
-import { Button, List, Modal, Form, Input, Select, Checkbox, Row, Col } from 'antd';
+import { Button, List, Modal, Form, Input, Select, Checkbox, Row, Col, notification } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { t } from '@apache-superset/core/translation';
 import * as AntdIcons from '@ant-design/icons';
@@ -78,6 +78,25 @@ export default function HTMLViewerActionsControl({
 
   const handleOk = () => {
     form.validateFields().then(values => {
+      const trimmedLabel = String(values.buttonLabel || values.modalTitle || '').trim();
+
+      const isDuplicateLabel = value.some(
+        (item: any, idx: number) =>
+          idx !== editingIndex &&
+          String(item.buttonLabel || item.modalTitle || '').toLowerCase().trim() ===
+            trimmedLabel.toLowerCase(),
+      );
+
+      if (isDuplicateLabel && trimmedLabel) {
+        notification.error({
+          message: t('Duplicate Action Name'),
+          description: t(
+            `HTML Viewer Action name "${trimmedLabel}" already exists. Action names must be unique.`,
+          ),
+        });
+        return;
+      }
+
       const config: HTMLViewerActionConfig = {
         ...values,
       };

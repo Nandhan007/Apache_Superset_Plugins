@@ -935,6 +935,91 @@ const config: ControlPanelConfig = {
       controlSetRows: [
         [
           {
+            name: 'editableMetrics',
+            config: {
+              type: 'SelectControl',
+              multi: true,
+              label: t('Editable Metrics'),
+              description: t(
+                'Select specific metrics to enforce their editability. Checked metrics will be editable, unchecked metrics will be read-only.',
+              ),
+              default: [],
+              renderTrigger: true,
+              visibility: ({ controls }) =>
+                ensureIsArray(controls?.metrics?.value).length > 0,
+              mapStateToProps: (state: ControlPanelState) => {
+                const formMetrics = ensureIsArray(
+                  state?.controls?.metrics?.value,
+                );
+                const datasourceMetrics =
+                  (state?.datasource as Dataset)?.metrics || [];
+
+                const choices = formMetrics
+                  .map((metric: any) => {
+                    if (!metric) {
+                      return null;
+                    }
+                    let metricValue: string = '';
+                    let metricLabel: string = '';
+
+                    if (typeof metric === 'string') {
+                      metricValue = metric;
+                      const metricDef = datasourceMetrics.find(
+                        (m: any) => m.metric_name === metric,
+                      );
+                      metricLabel =
+                        metricDef?.verbose_name ||
+                        metricDef?.metric_name ||
+                        metric;
+                    } else if (metric.label) {
+                      metricValue = metric.label;
+                      metricLabel = metric.label;
+                    } else if (
+                      metric.expressionType === 'SIMPLE' &&
+                      metric.column?.column_name
+                    ) {
+                      metricValue = metric.column.column_name;
+                      metricLabel = metric.column.column_name;
+                    } else {
+                      const fallbackValue =
+                        metric.column?.column_name ||
+                        metric.label ||
+                        JSON.stringify(metric);
+                      metricValue = fallbackValue;
+                      metricLabel = metric.label || metricValue;
+                    }
+
+                    if (!metricValue) {
+                      return null;
+                    }
+
+                    return [metricValue, metricLabel];
+                  })
+                  .filter(Boolean) as [string, string][];
+
+                return {
+                  choices,
+                };
+              },
+            },
+          },
+        ],
+        [
+          {
+            name: 'enableLayout',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Enable Layout Editor'),
+              renderTrigger: true,
+              default: true,
+              description: t(
+                'Show the "Layout" button to allow users to customize columns/metrics layout.',
+              ),
+            },
+          },
+        ],
+        [
+          {
             name: 'aggregateFunction',
             config: {
               type: 'SelectControl',
@@ -1053,96 +1138,6 @@ const config: ControlPanelConfig = {
       expanded: true,
       tabOverride: 'customize',
       controlSetRows: [
-        [
-          {
-            name: 'editableMetrics',
-            config: {
-              type: 'SelectControl',
-              multi: true,
-              label: t('Editable Metrics'),
-              description: t(
-                'Select specific metrics to enforce their editability. Checked metrics will be editable, unchecked metrics will be read-only.',
-              ),
-              default: [],
-              renderTrigger: true,
-              visibility: ({ controls }) =>
-                ensureIsArray(controls?.metrics?.value).length > 0,
-              mapStateToProps: (state: ControlPanelState) => {
-                const formMetrics = ensureIsArray(
-                  state?.controls?.metrics?.value,
-                );
-                const datasourceMetrics =
-                  (state?.datasource as Dataset)?.metrics || [];
-
-                // Merge form metrics with available datasource metrics to ensure we catch everything
-                // However, usually we only want to allow editing *selected* metrics?
-                // The requirements say "list of all metrics defined in the Data section".
-                // So we stick to `state?.controls?.metrics?.value`.
-
-                const choices = formMetrics
-                  .map((metric: any) => {
-                    if (!metric) {
-                      return null;
-                    }
-                    let metricValue: string = '';
-                    let metricLabel: string = '';
-
-                    if (typeof metric === 'string') {
-                      metricValue = metric;
-                      const metricDef = datasourceMetrics.find(
-                        (m: any) => m.metric_name === metric,
-                      );
-                      metricLabel =
-                        metricDef?.verbose_name ||
-                        metricDef?.metric_name ||
-                        metric;
-                    } else if (metric.label) {
-                      metricValue = metric.label;
-                      metricLabel = metric.label;
-                    } else if (
-                      metric.expressionType === 'SIMPLE' &&
-                      metric.column?.column_name
-                    ) {
-                      metricValue = metric.column.column_name;
-                      metricLabel = metric.column.column_name;
-                    } else {
-                      const fallbackValue =
-                        metric.column?.column_name ||
-                        metric.label ||
-                        JSON.stringify(metric);
-                      metricValue = fallbackValue;
-                      metricLabel = metric.label || metricValue;
-                    }
-
-                    if (!metricValue) {
-                      return null;
-                    }
-
-                    return [metricValue, metricLabel];
-                  })
-                  .filter(Boolean) as [string, string][];
-
-                return {
-                  choices,
-                };
-              },
-            },
-          },
-        ],
-        [
-          {
-            name: 'enableLayout',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Enable Layout Editor'),
-              renderTrigger: true,
-              default: true,
-              description: t(
-                'Show the "Layout" button to allow users to customize columns/metrics layout.',
-              ),
-            },
-          },
-        ],
         [
           {
             name: 'valueFormat',
@@ -1337,31 +1332,36 @@ const config: ControlPanelConfig = {
     ensureIsArray(formData.hierarchyColumns).forEach((col: any) => {
       const colNameStr =
         typeof col === 'object' && col !== null
-          ? col.column_name || col.label || col.columnName
+          ? col.column_name || col.label || col.columnName || col.optionName
           : String(col);
 
       if (!colNameStr || seenNames.has(colNameStr)) return;
       seenNames.add(colNameStr);
 
-      if (typeof col === 'object' && col !== null) {
-        const expr =
-          col.expression ||
-          col.sqlExpression ||
-          col.sql_expression ||
-          col.sql ||
-          hierarchyColumnDefs[colNameStr];
-        if (expr) {
-          hierarchyColumnDefs[colNameStr] = expr;
-          hierarchyColumns.push({
-            ...col,
-            column_name: colNameStr,
-            label: col.label || colNameStr,
-            expression: expr,
-          });
-          return;
-        }
+      const expr =
+        (typeof col === 'object' && col !== null
+          ? col.expression || col.sqlExpression || col.sql_expression || col.sql
+          : undefined) || hierarchyColumnDefs[colNameStr];
+
+      if (expr) {
+        hierarchyColumnDefs[colNameStr] = expr;
+        hierarchyColumns.push(
+          typeof col === 'object' && col !== null
+            ? {
+                ...col,
+                column_name: colNameStr,
+                label: col.label || colNameStr,
+                expression: expr,
+              }
+            : {
+                column_name: colNameStr,
+                label: colNameStr,
+                expression: expr,
+              },
+        );
+      } else {
+        hierarchyColumns.push(col);
       }
-      hierarchyColumns.push(col);
     });
 
     const groupbyColumns = getStandardizedControls().controls.columns.filter(
