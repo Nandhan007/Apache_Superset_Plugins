@@ -803,46 +803,116 @@ export default function SupersetDataForm({
   };
 
   const renderFormFields = () => {
-    const rows: Array<Array<{ fieldName: string; span: number }>> = [];
-    let currentRow: Array<{ fieldName: string; span: number }> = [];
+    const renderFieldGrid = (fields: string[]) => {
+      const rows: Array<Array<{ fieldName: string; span: number }>> = [];
+      let currentRow: Array<{ fieldName: string; span: number }> = [];
+
+      fields.forEach(fieldName => {
+        const additionalConfig = getAdditionalConfig(fieldName);
+        const isFullWidth =
+          additionalConfig?.type === 'textarea' ||
+          additionalConfig?.type === 'file' ||
+          fieldName === 'comments';
+
+        const span = isFullWidth ? 24 : 12;
+
+        if (span === 24) {
+          if (currentRow.length > 0) {
+            rows.push(currentRow);
+            currentRow = [];
+          }
+          rows.push([{ fieldName, span: 24 }]);
+        } else {
+          currentRow.push({ fieldName, span: 12 });
+          if (currentRow.length === 2) {
+            rows.push(currentRow);
+            currentRow = [];
+          }
+        }
+      });
+
+      if (currentRow.length > 0) {
+        rows.push(currentRow);
+      }
+
+      return rows.map((rowItems, rowIndex) => (
+        <Row key={`form-row-${rowIndex}`} gutter={16}>
+          {rowItems.map(item => (
+            <Col key={item.fieldName} span={item.span}>
+              {renderField(item.fieldName)}
+            </Col>
+          ))}
+        </Row>
+      ));
+    };
+
+    const groupMap: Record<string, string[]> = {};
+    const groupOrder: string[] = [];
+    const ungroupedFields: string[] = [];
 
     formFields.forEach(fieldName => {
+      const config = getFieldConfig(fieldName);
       const additionalConfig = getAdditionalConfig(fieldName);
-      const isFullWidth =
-        additionalConfig?.type === 'textarea' ||
-        additionalConfig?.type === 'file' ||
-        fieldName === 'comments';
+      const isHierarchy =
+        !!config || additionalConfig?.type === 'hierarchy';
 
-      const span = isFullWidth ? 24 : 12;
+      if (isHierarchy) {
+        const rawGroup =
+          config?.hierarchyGroup ||
+          (config as any)?.hierarchy_group ||
+          additionalConfig?.hierarchyGroup ||
+          '';
+        const groupName = rawGroup.trim() || 'Hierarchy';
 
-      if (span === 24) {
-        if (currentRow.length > 0) {
-          rows.push(currentRow);
-          currentRow = [];
+        if (!groupMap[groupName]) {
+          groupMap[groupName] = [];
+          groupOrder.push(groupName);
         }
-        rows.push([{ fieldName, span: 24 }]);
+        groupMap[groupName].push(fieldName);
       } else {
-        currentRow.push({ fieldName, span: 12 });
-        if (currentRow.length === 2) {
-          rows.push(currentRow);
-          currentRow = [];
-        }
+        ungroupedFields.push(fieldName);
       }
     });
 
-    if (currentRow.length > 0) {
-      rows.push(currentRow);
-    }
+    const renderFullWidthFields = (fields: string[]) =>
+      fields.map(fieldName => (
+        <Row key={`fullwidth-row-${fieldName}`} gutter={16}>
+          <Col span={24}>{renderField(fieldName)}</Col>
+        </Row>
+      ));
 
-    return rows.map((rowItems, rowIndex) => (
-      <Row key={`form-row-${rowIndex}`} gutter={16}>
-        {rowItems.map(item => (
-          <Col key={item.fieldName} span={item.span}>
-            {renderField(item.fieldName)}
-          </Col>
+    return (
+      <>
+        {groupOrder.map(groupName => (
+          <div
+            key={groupName}
+            style={{
+              border: '1px solid #d9d9d9',
+              borderRadius: '6px',
+              padding: '16px 16px 0px 16px',
+              marginBottom: '16px',
+              background: '#fafafa',
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 'bold',
+                fontSize: '13px',
+                color: '#000000',
+                marginBottom: '12px',
+                paddingBottom: '6px',
+                borderBottom: '1px solid #e8e8e8',
+              }}
+            >
+              {groupName}
+            </div>
+            {renderFieldGrid(groupMap[groupName])}
+          </div>
         ))}
-      </Row>
-    ));
+
+        {ungroupedFields.length > 0 && renderFullWidthFields(ungroupedFields)}
+      </>
+    );
   };
 
   return (
