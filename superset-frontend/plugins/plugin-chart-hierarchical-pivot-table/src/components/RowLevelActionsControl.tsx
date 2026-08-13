@@ -67,6 +67,20 @@ export default function RowLevelActionsControl({
     form.validateFields().then(values => {
       const trimmedLabel = String(values.buttonLabel || '').trim();
 
+      if (trimmedLabel.length > 12) {
+        form.setFields([
+          {
+            name: 'buttonLabel',
+            errors: [t('Action name must be 12 characters or less')],
+          },
+        ]);
+        notification.error({
+          message: t('Action Name Too Long'),
+          description: t('Action button name must be 12 characters or less.'),
+        });
+        return;
+      }
+
       const isDuplicateLabel = value.some(
         (item: any, idx: number) =>
           idx !== editingIndex &&
@@ -326,9 +340,12 @@ export default function RowLevelActionsControl({
               <Form.Item
                 name="buttonLabel"
                 label={t('Button Label')}
-                rules={[{ required: true }]}
+                rules={[
+                  { required: true },
+                  { max: 10, message: t('Action name must be 10 characters or less') },
+                ]}
               >
-                <Input placeholder="e.g. Approve" />
+                <Input placeholder="e.g. Approve" maxLength={10} />
               </Form.Item>
             </Col>
             <Col span={12}>

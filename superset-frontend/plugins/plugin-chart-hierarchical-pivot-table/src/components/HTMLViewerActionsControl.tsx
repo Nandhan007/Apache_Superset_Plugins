@@ -78,6 +78,21 @@ export default function HTMLViewerActionsControl({
 
   const handleOk = () => {
     form.validateFields().then(values => {
+      const labelVal = String(values.buttonLabel || '').trim();
+      if (labelVal.length > 12) {
+        form.setFields([
+          {
+            name: 'buttonLabel',
+            errors: [t('Custom view action name must be 12 characters or less')],
+          },
+        ]);
+        notification.error({
+          message: t('Action Name Too Long'),
+          description: t('Custom view button name must be 12 characters or less.'),
+        });
+        return;
+      }
+
       const trimmedLabel = String(values.buttonLabel || values.modalTitle || '').trim();
 
       const isDuplicateLabel = value.some(
@@ -188,9 +203,12 @@ export default function HTMLViewerActionsControl({
               <Form.Item
                 name="buttonLabel"
                 label={t('Button Label')}
-                rules={[{ required: false }]}
+                rules={[
+                  { required: false },
+                  { max: 12, message: t('Custom view action name must be 12 characters or less') },
+                ]}
               >
-                <Input placeholder="e.g. View Details" />
+                <Input placeholder="e.g. View Details" maxLength={12} />
               </Form.Item>
             </Col>
             <Col span={12}>
