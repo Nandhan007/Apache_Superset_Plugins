@@ -125,21 +125,28 @@ export default function SupersetDataForm({
       }
 
       if (additionalConfig?.type === 'hierarchy') {
+        const exactGlobalConfig = hierarchyConfig.find(
+          c => c.fieldName === fieldName || c.columnName === fieldName,
+        );
+
         return {
-          ...(globalConfig || {}),
-          level: globalConfig?.level ?? 99,
+          ...(exactGlobalConfig || globalConfig || {}),
+          level: (exactGlobalConfig || globalConfig)?.level ?? 99,
           fieldName: fieldName,
           fieldLabel:
-            additionalConfig.label ||
-            globalConfig?.fieldLabel ||
+            exactGlobalConfig?.fieldLabel ||
+            (additionalConfig.label && !Array.isArray(additionalConfig.name)
+              ? additionalConfig.label
+              : undefined) ||
+            (globalConfig?.fieldName === fieldName ? globalConfig.fieldLabel : undefined) ||
             fieldName.charAt(0).toUpperCase() +
               fieldName.slice(1).replace(/_/g, ' '),
-          columnName: globalConfig?.columnName || fieldName,
-          parentField: globalConfig?.parentField || null,
-          filterColumn: globalConfig?.filterColumn || fieldName,
+          columnName: (exactGlobalConfig || globalConfig)?.columnName || fieldName,
+          parentField: (exactGlobalConfig || globalConfig)?.parentField || null,
+          filterColumn: (exactGlobalConfig || globalConfig)?.filterColumn || fieldName,
           hierarchyGroup:
-            globalConfig?.hierarchyGroup ||
-            (globalConfig as any)?.hierarchy_group ||
+            (exactGlobalConfig || globalConfig)?.hierarchyGroup ||
+            ((exactGlobalConfig || globalConfig) as any)?.hierarchy_group ||
             (targetGroup !== 'All' ? targetGroup : '') ||
             '',
           isMulti: !!additionalConfig.isMulti,
