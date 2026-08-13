@@ -983,6 +983,14 @@ export default function SupersetDataForm({
 
   const renderFormFields = () => {
     const renderFieldGrid = (fields: string[]) => {
+      if (fields.length === 1) {
+        return (
+          <Row key={`form-row-single-${fields[0]}`} gutter={16}>
+            <Col span={24}>{renderField(fields[0])}</Col>
+          </Row>
+        );
+      }
+
       const rows: Array<Array<{ fieldName: string; span: number }>> = [];
       let currentRow: Array<{ fieldName: string; span: number }> = [];
 
@@ -1032,8 +1040,9 @@ export default function SupersetDataForm({
     formFields.forEach(fieldName => {
       const config = getFieldConfig(fieldName);
       const additionalConfig = getAdditionalConfig(fieldName);
-      const isHierarchy =
-        !!config || additionalConfig?.type === 'hierarchy';
+      const isHierarchy = additionalConfig
+        ? additionalConfig.type === 'hierarchy'
+        : !!config;
 
       if (isHierarchy) {
         const rawGroup =

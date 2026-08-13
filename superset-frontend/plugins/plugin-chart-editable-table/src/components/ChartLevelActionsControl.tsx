@@ -93,22 +93,60 @@ export default function ChartLevelActionsControl({
       };
 
       if (Array.isArray(config.additionalFields)) {
-        const fieldNames = config.additionalFields.flatMap((f: any) =>
-          Array.isArray(f.name) ? f.name : [f.name],
-        ).filter(Boolean);
-        const seenNames = new Set<string>();
-        for (const name of fieldNames) {
-          const lower = String(name).toLowerCase().trim();
-          if (seenNames.has(lower)) {
+        const seenKeys = new Set<string>();
+        for (const f of config.additionalFields) {
+          if (!f) continue;
+
+          const isMissingName = Array.isArray(f.name)
+            ? f.name.length === 0 || f.name.some((n: any) => !n || !String(n).trim())
+            : !f.name || !String(f.name).trim();
+
+          if (isMissingName) {
             notification.error({
-              message: t('Duplicate Form Field Name'),
+              message: t('Field Name Required'),
               description: t(
-                `Field name "${name}" is duplicated in form configuration. Field names must be unique.`,
+                'Field name is required for all form fields in the action configuration.',
               ),
             });
             return;
           }
-          seenNames.add(lower);
+
+          const names = Array.isArray(f.name)
+            ? f.name
+            : f.name
+            ? [f.name]
+            : [];
+          const mappedCols = f.mappedColumn ? [f.mappedColumn] : [];
+
+          for (const name of names) {
+            const lower = String(name).toLowerCase().trim();
+            if (lower && seenKeys.has(lower)) {
+              notification.error({
+                message: t('Duplicate Field Name'),
+                description: t(
+                  `Field name or mapped column "${name}" is already used in form configuration.`,
+                ),
+              });
+              return;
+            }
+            if (lower) seenKeys.add(lower);
+          }
+
+          if (f.type !== 'hierarchy') {
+            for (const col of mappedCols) {
+              const lower = String(col).toLowerCase().trim();
+              if (lower && seenKeys.has(lower)) {
+                notification.error({
+                  message: t('Duplicate Field Name'),
+                  description: t(
+                    `Mapped column "${col}" is already used by another field in form configuration.`,
+                  ),
+                });
+                return;
+              }
+              if (lower) seenKeys.add(lower);
+            }
+          }
         }
       }
 
