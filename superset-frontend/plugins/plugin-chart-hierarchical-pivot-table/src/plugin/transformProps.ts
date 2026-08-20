@@ -245,9 +245,9 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
   const isRefreshing = (chartProps as any).isRefreshing;
 
   const { data, colnames, coltypes } = queriesData[0];
+  const ownState = (chartProps as any).ownState || (chartProps as any).rawFormData?.ownState || {};
+
   const {
-    groupbyRows,
-    groupbyColumns,
     metrics,
     tableRenderer,
     colOrder,
@@ -279,6 +279,9 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     globalRedirectionUrls,
     htmlViewerActions,
   } = formData;
+
+  const groupbyRows = ownState.groupbyRows !== undefined ? ownState.groupbyRows : formData.groupbyRows;
+  const groupbyColumns = ownState.groupbyColumns !== undefined ? ownState.groupbyColumns : formData.groupbyColumns;
 
   const { selectedFilters } = filterState;
   const granularity = extractTimegrain(rawFormData);

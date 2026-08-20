@@ -1335,46 +1335,6 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
     }
 
     setDataMask(newDataMask);
-
-    // Auto-Save to Backend
-    if (props.slice_id && props.rawFormData) {
-      const updatedFormData = { ...props.rawFormData };
-
-      if (props.isRawRecords) {
-        updatedFormData.all_columns = newItems;
-        updatedFormData.columns = newItems; // ensure legacy field is also updated if needed
-      } else {
-        updatedFormData.groupby = newItems;
-        updatedFormData.metrics =
-          newMetrics || props.ownState?.metrics || props.rawFormData.metrics;
-        // Clean up potentially conflicting fields if switching configs?
-        // For now assume we just update what we touch.
-      }
-
-      const queryContext = buildQuery(updatedFormData as any);
-
-      SupersetClient.put({
-        endpoint: `/api/v1/chart/${props.slice_id}`,
-        jsonPayload: {
-          params: JSON.stringify(updatedFormData),
-          query_context: JSON.stringify(queryContext),
-        },
-      })
-        .then(() => {
-          console.log('Chart layout saved successfully.');
-          notificationApi.success({
-            message: 'Success',
-            description: 'Chart layout saved successfully.',
-          });
-        })
-        .catch((err: any) => {
-          console.error('Failed to save chart layout:', err);
-          notificationApi.error({
-            message: 'Error',
-            description: 'Unable to save layout changes. Please try again.',
-          });
-        });
-    }
   };
 
   const [tableSize, setTableSize] = useState<TableSize>({

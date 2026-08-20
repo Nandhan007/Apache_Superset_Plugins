@@ -1116,7 +1116,10 @@ const transformProps = (
     slice_id,
     // Pivot Props
     rawFormData: originalFormData,
-    groupbyRows: formData.groupbyRows || formData.groupby,
+    groupbyRows:
+      ((chartProps as any).ownState?.groupbyRows !== undefined
+        ? (chartProps as any).ownState?.groupbyRows
+        : formData.groupbyRows || formData.groupby),
     backendApiUrl: formData.backendApiUrl,
     editableMetrics: formData.editableMetrics,
     datasource: (chartProps.datasource as { tableName?: string })?.tableName,

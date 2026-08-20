@@ -197,7 +197,6 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
     setControlValue,
     datasourceId,
     datasourceType,
-    sliceId,
     rawFormData,
     useCustomSorting,
     isRefreshing,
@@ -954,61 +953,20 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
     if (setControlValue) {
       setControlValue('groupbyRows', newRows);
       setControlValue('groupbyColumns', newCols);
-
-      // Trigger execution via ownState change, which ExploreViewContainer observes to call onQuery
-      setDataMask({
-        ownState: {
-          _trigger: Date.now(),
-        },
-      });
-
-      // Auto-Save: Persist changes to the backend
-      if (sliceId && rawFormData) {
-        const updatedFormData = {
-          ...rawFormData,
-          groupbyRows: newRows,
-          groupbyColumns: newCols,
-        };
-
-        const queryContext = buildQuery(updatedFormData as any);
-
-        SupersetClient.put({
-          endpoint: `/api/v1/chart/${sliceId}`,
-          jsonPayload: {
-            params: JSON.stringify(updatedFormData),
-            query_context: JSON.stringify(queryContext),
-          },
-        })
-          .then(() => {
-            console.log('Chart layout auto-saved successfully.');
-            notification.success({
-              message: 'Success',
-              description: 'Chart layout saved successfully.',
-            });
-          })
-          .catch(err => {
-            console.error('Failed to auto-save chart layout:', err);
-            notification.error({
-              message: 'Error',
-              description: 'Unable to save layout changes. Please try again.',
-            });
-          });
-      }
-    } else {
-      // Fallback or standard update
-      setDataMask({
-        ownState: {
-          groupbyRows: newRows,
-          groupbyColumns: newCols,
-          forceRefresh: Date.now(),
-        },
-        extraFormData: {
-          custom_form_data: {
-            force_refresh: Date.now(),
-          },
-        },
-      });
     }
+
+    setDataMask({
+      ownState: {
+        groupbyRows: newRows,
+        groupbyColumns: newCols,
+        forceRefresh: Date.now(),
+      },
+      extraFormData: {
+        custom_form_data: {
+          force_refresh: Date.now(),
+        },
+      },
+    });
   };
 
   const handleChange = useCallback(
