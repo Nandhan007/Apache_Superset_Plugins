@@ -125,9 +125,15 @@ export default function SupersetDataForm({
       }
 
       if (additionalConfig?.type === 'hierarchy') {
-        const exactGlobalConfig = hierarchyConfig.find(
-          c => c.fieldName === fieldName || c.columnName === fieldName,
-        );
+        const exactGlobalConfig =
+          hierarchyConfig.find(
+            c =>
+              (c.fieldName === fieldName || c.columnName === fieldName) &&
+              matchesGroup(c),
+          ) ||
+          hierarchyConfig.find(
+            c => c.fieldName === fieldName || c.columnName === fieldName,
+          );
 
         return {
           ...(exactGlobalConfig || globalConfig || {}),
@@ -267,6 +273,78 @@ export default function SupersetDataForm({
     return !isNaN(parsed) ? parsed : 0;
   }, [datasourceId]);
 
+  // Get chain of ancestor field configs for a field (walking up parentField within same hierarchyGroup)
+  const getAncestorChain = useCallback(
+    (fieldName: string, groupName?: string): HierarchyFieldConfig[] => {
+      const cfg = getFieldConfig(fieldName, groupName);
+      if (!cfg || !cfg.parentField) return [];
+      const parents = Array.isArray(cfg.parentField)
+        ? cfg.parentField
+        : [cfg.parentField];
+      const ancestors: HierarchyFieldConfig[] = [];
+      const group = groupName || cfg.hierarchyGroup;
+      parents.forEach(p => {
+        const pCfg = getFieldConfig(p, group);
+        if (pCfg) {
+          ancestors.push(pCfg);
+          ancestors.push(...getAncestorChain(pCfg.fieldName, group));
+        }
+      });
+      return ancestors;
+    },
+    [getFieldConfig],
+  );
+
+  // Get active ancestor filters present in formFields that have a selected value in parentValues
+  const getActiveFormAncestors = useCallback(
+    (
+      fieldName: string,
+      parentValues: Record<string, any>,
+      groupName?: string,
+    ) => {
+      const ancestors = getAncestorChain(fieldName, groupName);
+      const active: { fieldName: string; columnName: string; val: any }[] = [];
+      ancestors.forEach(anc => {
+        const inForm =
+          Array.isArray(formFields) &&
+          formFields.some(f => f === anc.fieldName || f === anc.columnName);
+        if (inForm) {
+          const val =
+            parentValues[anc.fieldName] ?? parentValues[anc.columnName];
+          if (
+            val !== undefined &&
+            val !== null &&
+            (!Array.isArray(val) || val.length > 0)
+          ) {
+            active.push({
+              fieldName: anc.fieldName,
+              columnName: anc.columnName || anc.fieldName,
+              val,
+            });
+          }
+        }
+      });
+      return active;
+    },
+    [getAncestorChain, formFields],
+  );
+
+  // Get all descendant fields in formFields for a given field
+  const getFormDescendants = useCallback(
+    (fieldName: string, groupName?: string): string[] => {
+      const fieldConfig = getFieldConfig(fieldName, groupName);
+      const group = groupName || fieldConfig?.hierarchyGroup;
+      return ensureIsArray(formFields).filter(f => {
+        if (f === fieldName) return false;
+        const ancestors = getAncestorChain(f, group);
+        return ancestors.some(
+          anc => anc.fieldName === fieldName || anc.columnName === fieldName,
+        );
+      });
+    },
+    [getFieldConfig, getAncestorChain, formFields],
+  );
+
   // Fetch options for a field
   const fetchFieldOptions = useCallback(
     async (fieldName: string, parentValues: Record<string, any>) => {
@@ -305,39 +383,22 @@ export default function SupersetDataForm({
 
       try {
         let uniqueValues: any[] = [];
+        const activeAncestors = getActiveFormAncestors(
+          fieldName,
+          parentValues,
+          config.hierarchyGroup,
+        );
+
+        const filters: any[] = [];
+        activeAncestors.forEach(anc => {
+          filters.push({
+            col: anc.columnName,
+            op: Array.isArray(anc.val) ? 'IN' : '==',
+            val: anc.val,
+          });
+        });
 
         if (useApi) {
-          const filters = [];
-          if (config.parentField) {
-            const parent = Array.isArray(config.parentField)
-              ? config.parentField[0]
-              : config.parentField;
-
-            const isParentInForm =
-              Array.isArray(formFields) && formFields.includes(parent);
-
-            if (parent && isParentInForm) {
-              const parentVal = parentValues[parent];
-              if (
-                parentVal !== undefined &&
-                parentVal !== null &&
-                (!Array.isArray(parentVal) || parentVal.length > 0)
-              ) {
-                const parentConfig = getFieldConfig(
-                  parent,
-                  config.hierarchyGroup,
-                );
-                const filterCol = parentConfig?.columnName || parent;
-
-                filters.push({
-                  col: filterCol,
-                  op: Array.isArray(parentVal) ? 'IN' : '==',
-                  val: parentVal,
-                });
-              }
-            }
-          }
-
           console.log(
             `[SupersetDataForm DEBUG] Posting to /api/v1/chart/data for "${fieldName}":`,
             { safeDatasourceId, datasourceType, columnName: config.columnName, filters },
@@ -375,47 +436,27 @@ export default function SupersetDataForm({
           );
         } else {
           let filteredRows = data || [];
-          let isParentInForm = false;
 
-          if (config.parentField) {
-            const parent = Array.isArray(config.parentField)
-              ? config.parentField[0]
-              : config.parentField;
-
-            isParentInForm =
-              Array.isArray(formFields) && formFields.includes(parent);
-
-            if (parent && isParentInForm) {
-              const parentVal = parentValues[parent];
-              if (
-                parentVal !== undefined &&
-                parentVal !== null &&
-                (!Array.isArray(parentVal) || parentVal.length > 0)
-              ) {
-                const parentConfig = getFieldConfig(
-                  parent,
-                  config.hierarchyGroup,
-                );
-                const filterCol = parentConfig?.columnName || parent;
-
-                filteredRows = filteredRows.filter(row => {
-                  const rowVal =
-                    getRowValue(row, filterCol) ?? getRowValue(row, parent);
-                  if (rowVal === undefined || rowVal === null) return false;
-                  if (Array.isArray(parentVal)) {
-                    return parentVal.some(
-                      val =>
-                        String(val).toLowerCase().trim() ===
-                        String(rowVal).toLowerCase().trim(),
-                    );
-                  }
-                  return (
-                    String(rowVal).toLowerCase().trim() ===
-                    String(parentVal).toLowerCase().trim()
+          if (activeAncestors.length > 0) {
+            filteredRows = filteredRows.filter(row => {
+              return activeAncestors.every(anc => {
+                const rowVal =
+                  getRowValue(row, anc.columnName) ??
+                  getRowValue(row, anc.fieldName);
+                if (rowVal === undefined || rowVal === null) return false;
+                if (Array.isArray(anc.val)) {
+                  return anc.val.some(
+                    v =>
+                      String(v).toLowerCase().trim() ===
+                      String(rowVal).toLowerCase().trim(),
                   );
-                });
-              }
-            }
+                }
+                return (
+                  String(rowVal).toLowerCase().trim() ===
+                  String(anc.val).toLowerCase().trim()
+                );
+              });
+            });
           }
 
           uniqueValues = Array.from(
@@ -431,45 +472,18 @@ export default function SupersetDataForm({
           );
 
           console.log(
-            `[SupersetDataForm DEBUG] Local data fetched ${uniqueValues.length} unique values for "${fieldName}" (isParentInForm=${isParentInForm}):`,
+            `[SupersetDataForm DEBUG] Local data fetched ${uniqueValues.length} unique values for "${fieldName}" (activeAncestorsCount=${activeAncestors.length}):`,
             uniqueValues,
           );
 
           if (
-            (uniqueValues.length === 0 || !isParentInForm) &&
+            (uniqueValues.length === 0 || activeAncestors.length === 0) &&
             safeDatasourceId > 0
           ) {
             console.log(
-              `[SupersetDataForm DEBUG] Triggering API fallback for "${fieldName}" (localCount=${uniqueValues.length}, isParentInForm=${isParentInForm}, safeDatasourceId=${safeDatasourceId}):`,
+              `[SupersetDataForm DEBUG] Triggering API fallback for "${fieldName}" (localCount=${uniqueValues.length}, activeAncestorsCount=${activeAncestors.length}, safeDatasourceId=${safeDatasourceId}):`,
             );
             try {
-              const filters = [];
-              if (config.parentField) {
-                const parent = Array.isArray(config.parentField)
-                  ? config.parentField[0]
-                  : config.parentField;
-                const parentInForm =
-                  Array.isArray(formFields) && formFields.includes(parent);
-                if (parent && parentInForm) {
-                  const parentVal = parentValues[parent];
-                  if (
-                    parentVal !== undefined &&
-                    parentVal !== null &&
-                    (!Array.isArray(parentVal) || parentVal.length > 0)
-                  ) {
-                    const parentConfig = getFieldConfig(
-                      parent,
-                      config.hierarchyGroup,
-                    );
-                    const filterCol = parentConfig?.columnName || parent;
-                    filters.push({
-                      col: filterCol,
-                      op: Array.isArray(parentVal) ? 'IN' : '==',
-                      val: parentVal,
-                    });
-                  }
-                }
-              }
               const response = await SupersetClient.post({
                 endpoint: '/api/v1/chart/data',
                 jsonPayload: {
@@ -573,7 +587,17 @@ export default function SupersetDataForm({
         }));
       }
     },
-    [datasourceId, getFieldConfig, data, excludeOptionFilter],
+    [
+      datasourceId,
+      getFieldConfig,
+      data,
+      excludeOptionFilter,
+      getActiveFormAncestors,
+      datasourceType,
+      safeDatasourceId,
+      formFields,
+      hierarchyConfig,
+    ],
   );
 
   // Initial load for form fields
@@ -582,12 +606,12 @@ export default function SupersetDataForm({
     ensureIsArray(formFields).forEach(fieldName => {
       const config = getFieldConfig(fieldName);
       if (config) {
-        const parent = Array.isArray(config.parentField)
-          ? config.parentField[0]
-          : config.parentField;
-        const isParentInForm =
-          parent && Array.isArray(formFields) && formFields.includes(parent);
-        if (!parent || !isParentInForm) {
+        const activeAncestors = getActiveFormAncestors(
+          fieldName,
+          {},
+          config.hierarchyGroup,
+        );
+        if (activeAncestors.length === 0) {
           fetchFieldOptions(fieldName, {});
         }
       }
@@ -611,17 +635,13 @@ export default function SupersetDataForm({
         (a, b) => a.level - b.level,
       );
       sortedConfig.forEach(field => {
-        if (field.parentField) {
-          const parents = Array.isArray(field.parentField)
-            ? field.parentField
-            : [field.parentField];
-          const allParentsPresent = parents.every(p => {
-            const val = sanitizedValues[p];
-            return Array.isArray(val) ? val.length > 0 : !!val;
-          });
-          if (allParentsPresent) {
-            fetchFieldOptions(field.fieldName, sanitizedValues);
-          }
+        const activeAncestors = getActiveFormAncestors(
+          field.fieldName,
+          sanitizedValues,
+          field.hierarchyGroup,
+        );
+        if (activeAncestors.length > 0) {
+          fetchFieldOptions(field.fieldName, sanitizedValues);
         }
       });
 
@@ -636,6 +656,8 @@ export default function SupersetDataForm({
     form,
     rowData,
     additionalFields,
+    getActiveFormAncestors,
+    getFieldConfig,
   ]);
 
   const handleFieldChange = (fieldName: string, value: any) => {
@@ -649,46 +671,16 @@ export default function SupersetDataForm({
       return;
     }
 
-    // Identify children
-    const children = hierarchyConfig.filter(c => {
-      const parentMatches = Array.isArray(c.parentField)
-        ? c.parentField.includes(fieldName)
-        : c.parentField === fieldName;
-      if (!parentMatches) return false;
-
-      if (config?.hierarchyGroup) {
-        const childGroup = c.hierarchyGroup || (c as any).hierarchy_group;
-        return childGroup === config.hierarchyGroup;
-      }
-      return true;
-    });
+    // Identify form descendants across all hierarchy levels (including skipped intermediate levels)
+    const descendantNames = getFormDescendants(fieldName, config.hierarchyGroup);
 
     const valuesToClear: Record<string, any> = {};
     const optionsToClear: Record<string, any> = {};
 
-    const recurseClear = (configs: HierarchyFieldConfig[]) => {
-      configs.forEach(c => {
-        valuesToClear[c.fieldName] = undefined;
-        optionsToClear[c.fieldName] = [];
-
-        // Find grandchildren
-        const grandChildren = hierarchyConfig.filter(gc => {
-          const parentMatches = Array.isArray(gc.parentField)
-            ? gc.parentField.includes(c.fieldName)
-            : gc.parentField === c.fieldName;
-          if (!parentMatches) return false;
-
-          if (c.hierarchyGroup) {
-            const gcGroup = gc.hierarchyGroup || (gc as any).hierarchy_group;
-            return gcGroup === c.hierarchyGroup;
-          }
-          return true;
-        });
-        if (grandChildren.length > 0) recurseClear(grandChildren);
-      });
-    };
-
-    recurseClear(children);
+    descendantNames.forEach(dName => {
+      valuesToClear[dName] = undefined;
+      optionsToClear[dName] = [];
+    });
 
     // Update form
     form.setFieldsValue(valuesToClear);
@@ -701,9 +693,9 @@ export default function SupersetDataForm({
       options: { ...prev.options, ...optionsToClear },
     }));
 
-    // Trigger fetch for immediate children
-    children.forEach(child => {
-      fetchFieldOptions(child.fieldName, finalValues);
+    // Trigger option re-fetch for all form descendants
+    descendantNames.forEach(dName => {
+      fetchFieldOptions(dName, finalValues);
     });
   };
 
@@ -736,8 +728,8 @@ export default function SupersetDataForm({
   };
 
   const renderField = (fieldName: string) => {
-    const config = getFieldConfig(fieldName);
     const additionalConfig = getAdditionalConfig(fieldName);
+    const config = getFieldConfig(fieldName, additionalConfig?.hierarchyGroup);
 
     const isHierarchy =
       !!config && (!additionalConfig || additionalConfig.type === 'hierarchy');
@@ -751,24 +743,24 @@ export default function SupersetDataForm({
 
     const isLoading = formState.loading[fieldName];
     const options = formState.options[fieldName] || [];
+
     const isDisabled = !!(
       isHierarchy &&
-      config?.parentField &&
       (() => {
-        const parents = Array.isArray(config.parentField)
-          ? config.parentField
-          : [config.parentField];
-
-        const activeParentsInForm = parents.filter(
-          p => formFields && formFields.includes(p),
+        const ancestorsInForm = getAncestorChain(
+          fieldName,
+          config?.hierarchyGroup || additionalConfig?.hierarchyGroup,
+        ).filter(anc =>
+          formFields && formFields.some(f => f === anc.fieldName || f === anc.columnName),
         );
 
-        if (activeParentsInForm.length === 0) {
+        if (ancestorsInForm.length === 0) {
           return false;
         }
 
-        return !activeParentsInForm.every(p => {
-          const val = formState.values[p];
+        return !ancestorsInForm.every(anc => {
+          const val =
+            formState.values[anc.fieldName] ?? formState.values[anc.columnName];
           return Array.isArray(val)
             ? val.length > 0
             : val !== undefined && val !== null && val !== '';
@@ -1038,17 +1030,17 @@ export default function SupersetDataForm({
     const ungroupedFields: string[] = [];
 
     formFields.forEach(fieldName => {
-      const config = getFieldConfig(fieldName);
       const additionalConfig = getAdditionalConfig(fieldName);
+      const config = getFieldConfig(fieldName, additionalConfig?.hierarchyGroup);
       const isHierarchy = additionalConfig
         ? additionalConfig.type === 'hierarchy'
         : !!config;
 
       if (isHierarchy) {
         const rawGroup =
+          additionalConfig?.hierarchyGroup ||
           config?.hierarchyGroup ||
           (config as any)?.hierarchy_group ||
-          additionalConfig?.hierarchyGroup ||
           '';
         const groupName = rawGroup.trim() || 'Hierarchy';
 
