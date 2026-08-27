@@ -727,19 +727,19 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
       cellEditPayloadMapping,
     );
   }, [
-    backendApiUrl,
-    editableMetrics,
     data,
     notificationApi,
     datasource,
     groupbyRows,
-    cellEditPayloadMapping,
   ]);
 
-  // Update data ref when data changes (e.g. valid re-query)
+  // Update dynamic properties when they change without wiping modifications
   useEffect(() => {
     cellEditManager.data = data;
-  }, [data, cellEditManager]);
+    cellEditManager.backendApiUrl = backendApiUrl;
+    cellEditManager.editableMetrics = editableMetrics;
+    cellEditManager.cellEditPayloadMapping = cellEditPayloadMapping;
+  }, [data, backendApiUrl, editableMetrics, cellEditPayloadMapping, cellEditManager]);
 
   useEffect(() => {
     const listener = () => setForceUpdate(prev => prev + 1);

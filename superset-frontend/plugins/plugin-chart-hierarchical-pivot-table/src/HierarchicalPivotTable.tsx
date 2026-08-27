@@ -1632,7 +1632,12 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
               allowRenderHtml={allowRenderHtml}
               metrics={metrics}
               theme={theme}
-              backendApiUrl={backendApiUrl}
+              backendApiUrl={
+                backendApiUrl ||
+                (rawFormData as any)?.backendApiUrl ||
+                (rawFormData as any)?.backend_api_url ||
+                ''
+              }
               editableMetrics={editableMetrics}
               datasource={datasource}
               onRegisterSave={(

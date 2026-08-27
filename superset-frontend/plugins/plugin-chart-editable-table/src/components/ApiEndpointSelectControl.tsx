@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Select } from 'antd';
 import { SupersetClient } from '@superset-ui/core';
 import axios from 'axios';
@@ -68,11 +68,30 @@ export default function ApiEndpointSelectControl({
 
         if (isMounted && Array.isArray(data)) {
           const opts: ApiEndpointOption[] = data
-            .filter((item: any) => item && (item.Routes || item.Name))
-            .map((item: any) => ({
-              label: item.Name || item.Routes,
-              value: item.Routes || item.Name,
-            }));
+            .map((item: any) => {
+              if (typeof item === 'string') {
+                return { label: item, value: item };
+              }
+              const route =
+                item.Routes ||
+                item.routes ||
+                item.Route ||
+                item.route ||
+                item.endpoint ||
+                item.path ||
+                item.url;
+              const name =
+                item.Name ||
+                item.name ||
+                item.label ||
+                route;
+              if (!route && !name) return null;
+              return {
+                label: String(name || route),
+                value: String(route || name),
+              };
+            })
+            .filter(Boolean) as ApiEndpointOption[];
           setOptions(opts);
         }
       } catch (err) {
@@ -96,11 +115,23 @@ export default function ApiEndpointSelectControl({
     };
   }, []);
 
+  const mergedOptions = useMemo(() => {
+    if (value && !options.some(opt => opt.value === value)) {
+      return [{ label: value, value }, ...options];
+    }
+    return options;
+  }, [options, value]);
+
   return (
     <Select
       value={value || undefined}
-      onChange={onChange}
-      options={options}
+      onChange={(val: any) => {
+        console.log('[ApiEndpointSelectControl DEBUG] Selected value:', val);
+        if (onChange) {
+          onChange(val);
+        }
+      }}
+      options={mergedOptions}
       loading={loading}
       disabled={disabled}
       placeholder={placeholder}

@@ -268,7 +268,7 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     timeGrainSqla,
     currencyFormat,
     allowRenderHtml,
-    backendApiUrl,
+    backendApiUrl: rawBackendApiUrl,
     editableMetrics,
     useCustomSorting,
     hierarchyColumns,
@@ -279,6 +279,23 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     globalRedirectionUrls,
     htmlViewerActions,
   } = formData;
+
+  const backendApiUrl =
+    rawBackendApiUrl ||
+    (formData as any)?.backend_api_url ||
+    (chartProps.rawFormData as any)?.backendApiUrl ||
+    (chartProps.rawFormData as any)?.backend_api_url ||
+    (rawFormData as any)?.backendApiUrl ||
+    (rawFormData as any)?.backend_api_url ||
+    (chartProps as any)?.controls?.backendApiUrl?.value ||
+    '';
+
+  console.log('[transformProps DEBUG] Resolved backendApiUrl:', {
+    formData_backendApiUrl: rawBackendApiUrl,
+    rawFormData_backendApiUrl: (chartProps.rawFormData as any)?.backendApiUrl,
+    controls_backendApiUrl: (chartProps as any)?.controls?.backendApiUrl?.value,
+    backendApiUrl,
+  });
 
   const groupbyRows = ownState.groupbyRows !== undefined ? ownState.groupbyRows : formData.groupbyRows;
   const groupbyColumns = ownState.groupbyColumns !== undefined ? ownState.groupbyColumns : formData.groupbyColumns;

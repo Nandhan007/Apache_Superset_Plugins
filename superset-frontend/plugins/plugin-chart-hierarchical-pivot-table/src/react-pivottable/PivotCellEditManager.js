@@ -29,6 +29,13 @@ export class PivotCellEditManager {
     this.datasource = datasource;
     this.notification = notificationInstance || notification;
     this.cellEditPayloadMapping = cellEditPayloadMapping;
+
+    console.log('[PivotCellEditManager DEBUG] Initialized with:', {
+      backendApiUrl: this.backendApiUrl,
+      editableMetrics: this.editableMetrics,
+      datasource: this.datasource,
+      cellEditPayloadMapping: this.cellEditPayloadMapping,
+    });
   }
 
   addChangeListener = listener => {
@@ -98,6 +105,13 @@ export class PivotCellEditManager {
     } else if (metricInColKey) {
       const metricIndex = this.cols.indexOf('Metric');
       const metricDisplayLabel = colKey[metricIndex]; // Assuming next element is the metric display label
+      metricName = getOriginalMetricName(metricDisplayLabel) || metricName;
+    } else if (Array.isArray(this.metrics) && this.metrics.length > 0) {
+      const firstMetric = this.metrics[0];
+      const metricDisplayLabel =
+        typeof firstMetric === 'string'
+          ? firstMetric
+          : firstMetric.label || firstMetric.metric_name;
       metricName = getOriginalMetricName(metricDisplayLabel) || metricName;
     }
 
@@ -177,13 +191,25 @@ export class PivotCellEditManager {
   sendModifications = async () => {
     const backendApiUrl = this.backendApiUrl?.trim();
 
+    console.log('[PivotCellEditManager DEBUG] sendModifications called:', {
+      backendApiUrl,
+      rawBackendApiUrl: this.backendApiUrl,
+      modificationsCount: this.modifications.size,
+      modifications: Array.from(this.modifications.entries()),
+      datasource: this.datasource,
+      cellEditPayloadMapping: this.cellEditPayloadMapping,
+    });
+
     if (!backendApiUrl) {
       console.warn(
-        'Backend URL is not configured. Modifications will not be sent.',
+        '[PivotCellEditManager WARN] Backend URL is not configured. Modifications will not be sent.',
+        { backendApiUrl: this.backendApiUrl },
       );
       if (this.notification) {
         this.notification.error({
           message: 'Please configure API Endpoint',
+          description:
+            'Please select an API Endpoint under Backend Settings and click "Update chart" before saving.',
         });
       }
       return false;

@@ -482,6 +482,13 @@ export const TableRenderer = React.memo(props => {
     });
   }, [data, filters]);
 
+  const resolvedBackendApiUrl =
+    backendApiUrl ||
+    rawFormData?.backendApiUrl ||
+    rawFormData?.backend_api_url ||
+    tableOptions?.backendApiUrl ||
+    '';
+
   const cellEditManager = useMemo(
     () =>
       new PivotCellEditManager(
@@ -490,7 +497,7 @@ export const TableRenderer = React.memo(props => {
         data,
         aggregatorName,
         metrics,
-        backendApiUrl,
+        resolvedBackendApiUrl,
         editableMetrics,
         datasource,
         notification,
@@ -502,13 +509,25 @@ export const TableRenderer = React.memo(props => {
       data,
       aggregatorName,
       metrics,
-      backendApiUrl,
-      editableMetrics,
       datasource,
       metricsLayout,
-      cellEditPayloadMapping,
     ],
   );
+
+  useEffect(() => {
+    if (cellEditManager) {
+      cellEditManager.backendApiUrl = resolvedBackendApiUrl;
+      cellEditManager.editableMetrics = editableMetrics;
+      cellEditManager.cellEditPayloadMapping = cellEditPayloadMapping;
+      cellEditManager.notification = notification;
+    }
+  }, [
+    cellEditManager,
+    resolvedBackendApiUrl,
+    editableMetrics,
+    cellEditPayloadMapping,
+    notification,
+  ]);
 
   useEffect(() => {
     const handleChange = () => {
@@ -524,7 +543,7 @@ export const TableRenderer = React.memo(props => {
 
   useEffect(() => {
     if (onRegisterSave) {
-      onRegisterSave(cellEditManager.sendModifications);
+      onRegisterSave(() => cellEditManager.sendModifications());
     }
   }, [cellEditManager, onRegisterSave]);
 
@@ -2002,19 +2021,47 @@ export const TableRenderer = React.memo(props => {
         const isEditing = isEditingCell(rowKey, []);
 
         // Determine the metric for total cells (if applicable).
-        // For total cells, the metric might not be directly in colKey/rowKey.
-        // If 'Metric' is in initialRows/initialCols, the total cell represents the aggregation of all metrics.
-        // In such cases, we assume total cells are not individually editable,
-        // or we would need a more complex logic to identify which specific metric
-        // within the total is being edited, which is beyond current scope.
-        const isTotalEditableMetric = false; // Total cells are not considered individually editable for now.
+        let metricForTotalEditCheck = aggregatorName;
+        const metricInRowAttrs = initialRows.includes('Metric');
+
+        if (metricInRowAttrs) {
+          const metricIndex = initialRows.indexOf('Metric');
+          metricForTotalEditCheck = rowKey[metricIndex];
+        } else if (metrics && metrics.length > 0) {
+          const firstMetric = metrics[0];
+          metricForTotalEditCheck =
+            typeof firstMetric === 'string'
+              ? firstMetric
+              : firstMetric.label || firstMetric.metric_name;
+        }
+
+        const isEditableMetric = checkIsEditableMetric(metricForTotalEditCheck);
+
+        // When colAttrs.length === 0 (no column groupby dimensions), totalCell with full rowKey represents the editable leaf data cell for that row.
+        const isTotalEditableMetric =
+          isEditableMetric &&
+          colAttrs.length === 0 &&
+          rowKey.length === rowAttrs.length &&
+          !agg.isSubtotal &&
+          !agg.isGrandTotal;
+
+        const isDarkMode = theme.colorBgBase
+          ? isColorDark(theme.colorBgBase)
+          : false;
 
         const cellStyle = {
           padding: `${theme.sizeUnit}px`,
+          position: 'relative',
+          ...(isTotalEditableMetric
+            ? {
+                backgroundColor: isDarkMode ? '#2d2d14' : '#FFFBE6',
+              }
+            : {}),
           ...(isModified
             ? {
-                backgroundColor: '#ffd149ff',
-                borderLeft: '3px solid #d48806',
+                backgroundColor: isDarkMode ? '#cfaf2fff' : '#ffd149ff',
+                borderLeft: `3px solid ${isDarkMode ? '#d48806' : '#d48806'}`,
+                color: isDarkMode ? '#ffffff' : undefined,
               }
             : {}),
         };
@@ -2025,17 +2072,14 @@ export const TableRenderer = React.memo(props => {
             key="total"
             className={`pvtTotal ${isModified ? 'modified-cell' : ''}`}
             onClick={
-              isTotalEditableMetric && !agg.isSubtotal && !agg.isGrandTotal
+              isTotalEditableMetric
                 ? handleCellClick(rowKey, [], originalValue)
                 : rowTotalCallbacks[flatRowKey]
             }
             onContextMenu={e => onContextMenu(e, undefined, rowKey)}
             style={cellStyle}
           >
-            {isEditing &&
-            isTotalEditableMetric &&
-            !agg.isSubtotal &&
-            !agg.isGrandTotal ? (
+            {isEditing && isTotalEditableMetric ? (
               <EditableCell
                 value={displayValue}
                 onSave={newValue =>
@@ -2484,14 +2528,39 @@ export const TableRenderer = React.memo(props => {
         const displayValue = cellEditManager.getValue([], [], originalValue);
         const isModified = cellEditManager.isModified([], []);
         const isEditing = isEditingCell([], []);
-        const isGrandTotalEditableMetric = false;
+        let metricForGrandTotalEditCheck = aggregatorName;
+        if (metrics && metrics.length > 0) {
+          const firstMetric = metrics[0];
+          metricForGrandTotalEditCheck =
+            typeof firstMetric === 'string'
+              ? firstMetric
+              : firstMetric.label || firstMetric.metric_name;
+        }
+
+        const isGrandTotalEditableMetric =
+          rowAttrs.length === 0 &&
+          colAttrs.length === 0 &&
+          checkIsEditableMetric(metricForGrandTotalEditCheck) &&
+          !agg.isSubtotal &&
+          !agg.isGrandTotal;
+
+        const isDarkMode = theme.colorBgBase
+          ? isColorDark(theme.colorBgBase)
+          : false;
 
         const cellStyle = {
           padding: `${theme.sizeUnit}px`,
+          position: 'relative',
+          ...(isGrandTotalEditableMetric
+            ? {
+                backgroundColor: isDarkMode ? '#2d2d14' : '#FFFBE6',
+              }
+            : {}),
           ...(isModified
             ? {
-                backgroundColor: '#ffd149ff',
-                borderLeft: '3px solid #d48806',
+                backgroundColor: isDarkMode ? '#cfaf2fff' : '#ffd149ff',
+                borderLeft: `3px solid ${isDarkMode ? '#d48806' : '#d48806'}`,
+                color: isDarkMode ? '#ffffff' : undefined,
               }
             : {}),
         };
