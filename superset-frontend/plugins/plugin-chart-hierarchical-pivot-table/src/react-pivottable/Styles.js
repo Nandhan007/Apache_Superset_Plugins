@@ -139,7 +139,7 @@ export const Styles = styled.div`
 
     .toggle-wrapper > .toggle-val {
       white-space: normal;
-      color: red !important;
+      color: inherit;
     }
 
     .toggle {

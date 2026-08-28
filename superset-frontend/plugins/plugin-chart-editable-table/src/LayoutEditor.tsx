@@ -493,15 +493,30 @@ export default function LayoutEditor({
               key: '2',
               label: t('Data'),
               children: (
-                <>
-                  <div style={{ marginBottom: 16 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: '500px',
+                  }}
+                >
+                  <div style={{ marginBottom: 12 }}>
                     <Input
                       placeholder={t('Search Metrics...')}
                       value={searchText}
                       onChange={e => setSearchText(e.target.value)}
+                      allowClear
                     />
                   </div>
-                  <Container style={{ display: 'block' }}>
+                  <div
+                    style={{
+                      flex: 1,
+                      overflowY: 'auto',
+                      padding: '4px 8px',
+                      border: '1px solid #f0f0f0',
+                      borderRadius: 4,
+                    }}
+                  >
                     <List
                       dataSource={filteredMetrics}
                       renderItem={(item, index) => (
@@ -509,7 +524,7 @@ export default function LayoutEditor({
                           key={item.metric_name}
                           id={item.metric_name}
                           index={index}
-                          listType="metrics" // special
+                          listType="metrics"
                           text={item.verbose_name || item.metric_name}
                           moveCard={moveMetricCard as any}
                           isSelected={selectedMetricKeys.has(item.metric_name)}
@@ -517,8 +532,8 @@ export default function LayoutEditor({
                         />
                       )}
                     />
-                  </Container>
-                </>
+                  </div>
+                </div>
               ),
             },
           ]}
