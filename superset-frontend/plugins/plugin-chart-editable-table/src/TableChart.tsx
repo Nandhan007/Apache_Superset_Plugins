@@ -1031,11 +1031,58 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
           console.error('Force refresh failed', e);
         }
 
-        setDataMask({
-          ownState: {
-            forceRefresh: Date.now(),
-          },
-        });
+        // Trigger global UI update safely for embedded and normal dashboards
+        const store =
+          typeof window !== 'undefined'
+            ? (window as any).store
+            : null;
+        if (store && store.dispatch && store.getState) {
+          // Temporarily inject force=true into window history so all charts synchronously bypass Redis cache
+          const currentUrl = new URL(window.location.href);
+          let tempForceAdded = false;
+          if (!currentUrl.searchParams.has('force')) {
+            currentUrl.searchParams.set('force', 'true');
+            window.history.replaceState(
+              {},
+              '',
+              currentUrl.toString(),
+            );
+            tempForceAdded = true;
+          }
+
+          const state = store.getState();
+          if (state.charts) {
+            Object.keys(state.charts).forEach(chartIdStr => {
+              const chartId = parseInt(chartIdStr, 10);
+              if (!isNaN(chartId)) {
+                store.dispatch({
+                  type: 'TRIGGER_QUERY',
+                  value: Date.now(),
+                  key: chartId,
+                });
+              }
+            });
+          }
+
+          // Clear history cleanly after 3 seconds, ensuring Redux propagates the full lifecycle completely
+          if (tempForceAdded) {
+            setTimeout(() => {
+              const cleanUrl = new URL(window.location.href);
+              cleanUrl.searchParams.delete('force');
+              window.history.replaceState(
+                {},
+                '',
+                cleanUrl.toString(),
+              );
+            }, 3000);
+          }
+        } else {
+          setDataMask({
+            ownState: {
+              forceRefresh: Date.now(),
+            },
+          });
+        }
       }, 2000);
     } catch (err: any) {
       console.error('Action submission failed', err);
@@ -2664,23 +2711,70 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
                         console.error('Force refresh failed', e);
                       }
 
-                      setDataMask({
-                        ownState: {
-                          forceRefresh: Date.now(),
-                        },
-                        // Propagate refresh to dashboard
-                        extraFormData: emitCrossFilters
-                          ? {
-                              custom_form_data: {
-                                force_refresh: Date.now(),
-                              },
+                      // Trigger global UI update safely for embedded and normal dashboards
+                      const store =
+                        typeof window !== 'undefined'
+                          ? (window as any).store
+                          : null;
+                      if (store && store.dispatch && store.getState) {
+                        // Temporarily inject force=true into window history so all charts synchronously bypass Redis cache
+                        const currentUrl = new URL(window.location.href);
+                        let tempForceAdded = false;
+                        if (!currentUrl.searchParams.has('force')) {
+                          currentUrl.searchParams.set('force', 'true');
+                          window.history.replaceState(
+                            {},
+                            '',
+                            currentUrl.toString(),
+                          );
+                          tempForceAdded = true;
+                        }
+
+                        const state = store.getState();
+                        if (state.charts) {
+                          Object.keys(state.charts).forEach(chartIdStr => {
+                            const chartId = parseInt(chartIdStr, 10);
+                            if (!isNaN(chartId)) {
+                              store.dispatch({
+                                type: 'TRIGGER_QUERY',
+                                value: Date.now(),
+                                key: chartId,
+                              });
                             }
-                          : undefined,
-                      });
+                          });
+                        }
+
+                        // Clear history cleanly after 3 seconds, ensuring Redux propagates the full lifecycle completely
+                        if (tempForceAdded) {
+                          setTimeout(() => {
+                            const cleanUrl = new URL(window.location.href);
+                            cleanUrl.searchParams.delete('force');
+                            window.history.replaceState(
+                              {},
+                              '',
+                              cleanUrl.toString(),
+                            );
+                          }, 3000);
+                        }
+                      } else {
+                        setDataMask({
+                          ownState: {
+                            forceRefresh: Date.now(),
+                          },
+                          // Propagate refresh to dashboard
+                          extraFormData: emitCrossFilters
+                            ? {
+                                custom_form_data: {
+                                  force_refresh: Date.now(),
+                                },
+                              }
+                            : undefined,
+                        });
+                      }
                     } finally {
                       setIsSaving(false);
                     }
-                  }, 500);
+                  }, 1500);
                 } else {
                   setIsSaving(false);
                 }
@@ -2755,7 +2849,7 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
           style={{
             height: '100%',
             width: '100%',
-            paddingTop: '3px',
+            paddingTop: '0px',
             position: 'relative',
           }}
         >
@@ -2889,7 +2983,7 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
             serverPaginationData={serverPaginationData}
             pageSizeOptions={pageSizeOptions}
             width={widthFromState}
-            height={heightFromState - 44}
+            height={heightFromState - 36}
             actionHeader={actionHeader}
             serverPagination={serverPagination}
             onServerPaginationChange={handleServerPaginationChange}

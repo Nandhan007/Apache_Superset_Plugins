@@ -100,7 +100,7 @@ export default styled.div`
 
     /* Controls and metrics */
     .dt-controls {
-      padding-bottom: 0.65em;
+      padding-bottom: 4px;
     }
 
     .dt-metric {
