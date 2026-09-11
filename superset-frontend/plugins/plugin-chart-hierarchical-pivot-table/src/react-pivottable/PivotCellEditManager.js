@@ -115,7 +115,23 @@ export class PivotCellEditManager {
       metricName = getOriginalMetricName(metricDisplayLabel) || metricName;
     }
 
-    if (newValue === originalValue) {
+    const isNumOrig =
+      originalValue !== null &&
+      originalValue !== undefined &&
+      originalValue !== '' &&
+      !isNaN(Number(originalValue));
+    const isNumNew =
+      newValue !== null &&
+      newValue !== undefined &&
+      newValue !== '' &&
+      !isNaN(Number(newValue));
+
+    const isSameValue =
+      isNumOrig && isNumNew
+        ? Math.abs(Number(newValue) - Number(originalValue)) < 1e-7
+        : newValue === originalValue || String(newValue) === String(originalValue);
+
+    if (isSameValue) {
       // Remove modification if value equals original
       this.modifications.delete(cellKey);
     } else {

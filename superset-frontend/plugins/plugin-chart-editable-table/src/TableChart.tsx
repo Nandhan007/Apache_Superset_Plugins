@@ -95,6 +95,7 @@ import { transformPayload } from './utils/payloadTransform';
 import { Modal } from 'antd';
 import * as AntdIcons from '@ant-design/icons';
 import SupersetDataForm from './components/SupersetDataForm';
+import { CellTooltip } from './components/CellTooltip';
 import { getCustomSortKey, naturalSort } from './utils/sorting';
 import {
   ChartLevelActionConfig,
@@ -373,21 +374,65 @@ const EditableCell = ({
   column, // DataColumnMeta
   updateMyData,
   textAlign,
+  cellEditManager,
 }: any) => {
-  const [value, setValue] = useState(initialValue);
+  const isPercentage = Boolean(
+    column?.isPercentMetric ||
+      column?.isPercentage ||
+      (column?.config?.d3NumberFormat &&
+        typeof column.config.d3NumberFormat === 'string' &&
+        column.config.d3NumberFormat.includes('%')),
+  );
+
+  const toDisplayEditValue = useCallback(
+    (val: any) => {
+      if (
+        val !== null &&
+        val !== undefined &&
+        val !== '' &&
+        !isNaN(Number(val))
+      ) {
+        const num = isPercentage ? Number(val) * 100 : Number(val);
+        return num.toFixed(2);
+      }
+      return val ?? '';
+    },
+    [isPercentage],
+  );
+
+  const toOriginalValue = useCallback(
+    (val: any) => {
+      if (
+        isPercentage &&
+        val !== null &&
+        val !== undefined &&
+        val !== '' &&
+        !isNaN(Number(val))
+      ) {
+        return Number((Number(val) / 100).toFixed(4));
+      }
+      return val;
+    },
+    [isPercentage],
+  );
+
+  const [editValue, setEditValue] = useState(() =>
+    toDisplayEditValue(initialValue),
+  );
   const [isEditing, setIsEditing] = useState(false);
   const theme = useTheme();
 
   useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
+    setEditValue(toDisplayEditValue(initialValue));
+  }, [initialValue, toDisplayEditValue]);
 
   const onChange = (e: any) => {
-    setValue(e.target.value);
+    setEditValue(e.target.value);
   };
 
   const onBlur = () => {
-    updateMyData(index, columnId, value, original);
+    const originalScaleVal = toOriginalValue(editValue);
+    updateMyData(index, columnId, originalScaleVal, original);
     setIsEditing(false);
   };
 
@@ -397,7 +442,9 @@ const EditableCell = ({
     }
   };
 
-  const isModified = String(value) !== String(original[columnId]);
+  const isModified = cellEditManager
+    ? cellEditManager.isModified(index, columnId)
+    : false;
   const isDarkMode = theme.colorBgBase ? isColorDark(theme.colorBgBase) : false;
 
   // Dark mode colors matching Pivot Table implementation
@@ -407,9 +454,9 @@ const EditableCell = ({
   const backgroundColor = isModified ? modBg : defaultBg;
   const borderLeft = isModified ? '3px solid #d48806' : undefined;
   // Format value for display
-  let displayValue = value;
+  let displayValue = initialValue;
   if (column && formatColumnValue) {
-    const [_, text] = formatColumnValue(column, value);
+    const [_, text] = formatColumnValue(column, initialValue);
     displayValue = text;
   }
 
@@ -434,7 +481,7 @@ const EditableCell = ({
       {isEditing ? (
         <EditorContainer>
           <StyledInput
-            value={value}
+            value={editValue}
             onChange={onChange}
             onBlur={onBlur}
             onKeyDown={onKeyDown}
@@ -444,7 +491,14 @@ const EditableCell = ({
           />
         </EditorContainer>
       ) : (
-        displayValue
+        <CellTooltip
+          formattedValue={displayValue}
+          rawValue={initialValue}
+          title={column?.label || columnId}
+          isPercentage={isPercentage}
+        >
+          {displayValue}
+        </CellTooltip>
       )}
     </td>
   );
@@ -1941,6 +1995,7 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
                 updateMyData={updateMyData}
                 isEditable={true}
                 textAlign={textAlign}
+                cellEditManager={cellEditManager}
               />
             );
           }
@@ -2102,33 +2157,40 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
           // render `Cell`. This saves some time for large tables.
           return (
             <StyledCell {...cellProps}>
-              {valueRange && (
-                <div
-                  /* The following classes are added to support custom CSS styling */
-                  className={cx(
-                    'cell-bar',
-                    typeof value === 'number' && value < 0
-                      ? 'negative'
-                      : 'positive',
-                  )}
-                  css={cellBarStyles}
-                  role="presentation"
-                />
-              )}
-              {truncateLongCells ? (
-                <div
-                  className="dt-truncate-cell"
-                  style={columnWidth ? { width: columnWidth } : undefined}
-                >
-                  {arrow && <span css={arrowStyles}>{arrow}</span>}
-                  {text}
-                </div>
-              ) : (
-                <>
-                  {arrow && <span css={arrowStyles}>{arrow}</span>}
-                  {text}
-                </>
-              )}
+              <CellTooltip
+                formattedValue={text}
+                rawValue={value}
+                title={column?.label || column.key}
+                isPercentage={column?.isPercentage || column?.isPercentMetric}
+              >
+                {valueRange && (
+                  <div
+                    /* The following classes are added to support custom CSS styling */
+                    className={cx(
+                      'cell-bar',
+                      typeof value === 'number' && value < 0
+                        ? 'negative'
+                        : 'positive',
+                    )}
+                    css={cellBarStyles}
+                    role="presentation"
+                  />
+                )}
+                {truncateLongCells ? (
+                  <div
+                    className="dt-truncate-cell"
+                    style={columnWidth ? { width: columnWidth } : undefined}
+                  >
+                    {arrow && <span css={arrowStyles}>{arrow}</span>}
+                    {text}
+                  </div>
+                ) : (
+                  <>
+                    {arrow && <span css={arrowStyles}>{arrow}</span>}
+                    {text}
+                  </>
+                )}
+              </CellTooltip>
             </StyledCell>
           );
         },

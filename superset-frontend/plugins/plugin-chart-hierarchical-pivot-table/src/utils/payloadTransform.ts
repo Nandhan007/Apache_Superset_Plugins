@@ -17,6 +17,22 @@
  * under the License.
  */
 
+function hasPropertyPath(obj: any, path: string): boolean {
+  if (!path || typeof path !== 'string' || !obj || typeof obj !== 'object') {
+    return false;
+  }
+  const parts = path.split('.');
+  let curr = obj;
+  for (let i = 0; i < parts.length; i += 1) {
+    if (curr && typeof curr === 'object' && parts[i] in curr) {
+      curr = curr[parts[i]];
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
 function getValueByPath(obj: any, path: string): any {
   if (!path || typeof path !== 'string') return undefined;
   return path.split('.').reduce((acc, part) => {
@@ -30,17 +46,24 @@ function getValueByPath(obj: any, path: string): any {
 export function transformPayload(input: any, mapping: any): any {
   if (!mapping || typeof mapping !== 'object') return input;
 
-  const transform = (mapNode: any): any => {
+  const transformNode = (mapNode: any, currentObj: any): any => {
     if (typeof mapNode === 'string') {
-      return getValueByPath(input, mapNode);
+      if (hasPropertyPath(currentObj, mapNode)) {
+        return getValueByPath(currentObj, mapNode);
+      }
+      if (hasPropertyPath(input, mapNode)) {
+        return getValueByPath(input, mapNode);
+      }
+      // If mapNode is not a property path in input or currentObj, treat it as a literal constant value!
+      return mapNode;
     }
     if (Array.isArray(mapNode)) {
-      return mapNode.map(item => transform(item));
+      return mapNode.map(item => transformNode(item, currentObj));
     }
     if (mapNode && typeof mapNode === 'object') {
       const result: Record<string, any> = {};
       Object.entries(mapNode).forEach(([key, val]) => {
-        const transformedVal = transform(val);
+        const transformedVal = transformNode(val, currentObj);
         if (transformedVal !== undefined) {
           result[key] = transformedVal;
         }
@@ -50,5 +73,5 @@ export function transformPayload(input: any, mapping: any): any {
     return mapNode;
   };
 
-  return transform(mapping);
+  return transformNode(mapping, input);
 }

@@ -75,6 +75,7 @@ export interface DataColumnMeta {
     | CurrencyFormatter;
   isMetric?: boolean;
   isPercentMetric?: boolean;
+  isPercentage?: boolean;
   isNumeric?: boolean;
   config?: TableColumnConfig;
   isChildColumn?: boolean;

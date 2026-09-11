@@ -80,14 +80,26 @@ export class CellEditManager {
     columnId: string,
     originalValue: any,
     newValue: any,
-    record: DataRecord,
+    record?: DataRecord,
   ) => {
     const cellKey = this.getCellKey(rowIndex, columnId);
+    const isNumOrig =
+      originalValue !== null &&
+      originalValue !== undefined &&
+      originalValue !== '' &&
+      !isNaN(Number(originalValue));
+    const isNumNew =
+      newValue !== null &&
+      newValue !== undefined &&
+      newValue !== '' &&
+      !isNaN(Number(newValue));
 
-    if (
-      newValue === originalValue ||
-      String(newValue) === String(originalValue)
-    ) {
+    const isSameValue =
+      isNumOrig && isNumNew
+        ? Math.abs(Number(newValue) - Number(originalValue)) < 1e-7
+        : newValue === originalValue || String(newValue) === String(originalValue);
+
+    if (isSameValue) {
       this.modifications.delete(cellKey);
     } else {
       this.modifications.set(cellKey, {

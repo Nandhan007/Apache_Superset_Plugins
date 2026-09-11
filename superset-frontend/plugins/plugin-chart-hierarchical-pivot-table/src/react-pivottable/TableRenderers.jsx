@@ -25,6 +25,7 @@ import { PivotData, flatKey, isColorDark, getCustomSortKey } from './utilities';
 import { Styles } from './Styles';
 import { css } from '@emotion/react';
 import axios from 'axios';
+import { CellTooltip } from '../components/CellTooltip';
 import {
   Popover,
   Checkbox,
@@ -281,10 +282,23 @@ const RedirectionMenu = ({
 };
 
 class EditableCell extends React.Component {
+  static getEditValue(val, isPercentage) {
+    if (
+      val !== null &&
+      val !== undefined &&
+      val !== '' &&
+      !isNaN(Number(val))
+    ) {
+      const num = isPercentage ? Number(val) * 100 : Number(val);
+      return num.toFixed(2);
+    }
+    return String(val ?? '');
+  }
+
   constructor(props) {
     super(props);
     this.state = {
-      tempValue: String(props.value || ''),
+      tempValue: EditableCell.getEditValue(props.value, props.isPercentage),
       isValid: true,
     };
     this.cellRef = null;
@@ -297,8 +311,16 @@ class EditableCell extends React.Component {
   }
 
   componentDidUpdate(prevProps) {
-    if (prevProps.value !== this.props.value) {
-      this.setState({ tempValue: String(this.props.value || '') });
+    if (
+      prevProps.value !== this.props.value ||
+      prevProps.isPercentage !== this.props.isPercentage
+    ) {
+      this.setState({
+        tempValue: EditableCell.getEditValue(
+          this.props.value,
+          this.props.isPercentage,
+        ),
+      });
     }
   }
 
@@ -319,10 +341,13 @@ class EditableCell extends React.Component {
 
   handleSave = () => {
     const { tempValue, isValid } = this.state;
-    const { onSave } = this.props;
+    const { onSave, isPercentage } = this.props;
 
     if (isValid && tempValue.trim() !== '') {
-      const numValue = parseFloat(tempValue);
+      let numValue = parseFloat(tempValue);
+      if (isPercentage && !isNaN(numValue)) {
+        numValue = numValue / 100;
+      }
       onSave(numValue);
     } else {
       // Revert if invalid or empty (or maybe save empty/null?)
@@ -377,6 +402,7 @@ class EditableCell extends React.Component {
       >
         <input
           type="number"
+          step="0.01"
           ref={ref => {
             this.cellRef = ref;
           }}
@@ -436,6 +462,10 @@ export const TableRenderer = React.memo(props => {
     rawFormData,
     dashboardFilters,
     hasUniqueField,
+    columnFormats = {},
+    valueFormat,
+    currencyFormat,
+    currencyFormats = {},
   } = props;
 
   const hasRedirection = redirectionUrls && redirectionUrls.length > 0;
@@ -585,6 +615,22 @@ export const TableRenderer = React.memo(props => {
       });
     },
     [editableMetrics, metrics],
+  );
+
+  const checkIsPercentageMetric = useCallback(
+    targetMetricName => {
+      if (!targetMetricName) return false;
+      const format =
+        columnFormats?.[targetMetricName] ||
+        rawFormData?.column_config?.[targetMetricName]?.d3NumberFormat ||
+        valueFormat;
+      const isPercent =
+        (typeof format === 'string' && format.includes('%')) ||
+        (Array.isArray(rawFormData?.percent_metrics) &&
+          rawFormData.percent_metrics.includes(targetMetricName));
+      return Boolean(isPercent);
+    },
+    [columnFormats, rawFormData, valueFormat],
   );
 
   const handleCellModification = useCallback(() => {
@@ -1987,6 +2033,7 @@ export const TableRenderer = React.memo(props => {
             !isSubtotalOrGrandTotal ? (
               <EditableCell
                 value={displayValue}
+                isPercentage={checkIsPercentageMetric(metricForEditCheck)}
                 onSave={newValue =>
                   handleCellSave(rowKey, colKey, originalValue, newValue)
                 }
@@ -1994,15 +2041,22 @@ export const TableRenderer = React.memo(props => {
                 theme={theme}
               />
             ) : (
-              <span
-                title={
-                  isModified
-                    ? `Modified from ${originalValue} to ${displayValue}`
-                    : ''
-                }
+              <CellTooltip
+                formattedValue={agg.format(displayValue)}
+                rawValue={displayValue}
+                title={metricForEditCheck}
+                isPercentage={checkIsPercentageMetric(metricForEditCheck)}
               >
-                {displayCell(agg.format(displayValue), allowRenderHtml)}
-              </span>
+                <span
+                  title={
+                    isModified
+                      ? `Modified from ${originalValue} to ${displayValue}`
+                      : ''
+                  }
+                >
+                  {displayCell(agg.format(displayValue), allowRenderHtml)}
+                </span>
+              </CellTooltip>
             )}
           </td>
         );
@@ -2082,6 +2136,7 @@ export const TableRenderer = React.memo(props => {
             {isEditing && isTotalEditableMetric ? (
               <EditableCell
                 value={displayValue}
+                isPercentage={checkIsPercentageMetric(metricForTotalEditCheck)}
                 onSave={newValue =>
                   handleCellSave(rowKey, [], originalValue, newValue)
                 }
@@ -2089,15 +2144,24 @@ export const TableRenderer = React.memo(props => {
                 theme={theme}
               />
             ) : (
-              <span
-                title={
-                  isModified
-                    ? `Modified from ${originalValue} to ${displayValue}`
-                    : ''
-                }
+              <CellTooltip
+                formattedValue={agg.format(displayValue)}
+                rawValue={displayValue}
+                title={metricForTotalEditCheck}
+                isPercentage={checkIsPercentageMetric(
+                  metricForTotalEditCheck,
+                )}
               >
-                {displayCell(agg.format(displayValue), allowRenderHtml)}
-              </span>
+                <span
+                  title={
+                    isModified
+                      ? `Modified from ${originalValue} to ${displayValue}`
+                      : ''
+                  }
+                >
+                  {displayCell(agg.format(displayValue), allowRenderHtml)}
+                </span>
+              </CellTooltip>
             )}
           </td>
         );
@@ -2500,6 +2564,7 @@ export const TableRenderer = React.memo(props => {
             {isEditing && isCellEditable ? (
               <EditableCell
                 value={displayValue}
+                isPercentage={checkIsPercentageMetric(metricForEditCheck)}
                 onSave={newValue =>
                   handleCellSave([], colKey, originalValue, newValue)
                 }
@@ -2507,15 +2572,22 @@ export const TableRenderer = React.memo(props => {
                 theme={theme}
               />
             ) : (
-              <span
-                title={
-                  isModified
-                    ? `Modified from ${originalValue} to ${displayValue}`
-                    : ''
-                }
+              <CellTooltip
+                formattedValue={agg.format(displayValue)}
+                rawValue={displayValue}
+                title={metricForEditCheck}
+                isPercentage={checkIsPercentageMetric(metricForEditCheck)}
               >
-                {displayCell(agg.format(displayValue), allowRenderHtml)}
-              </span>
+                <span
+                  title={
+                    isModified
+                      ? `Modified from ${originalValue} to ${displayValue}`
+                      : ''
+                  }
+                >
+                  {displayCell(agg.format(displayValue), allowRenderHtml)}
+                </span>
+              </CellTooltip>
             )}
           </td>
         );
@@ -2584,6 +2656,9 @@ export const TableRenderer = React.memo(props => {
             !agg.isGrandTotal ? (
               <EditableCell
                 value={displayValue}
+                isPercentage={checkIsPercentageMetric(
+                  metricForGrandTotalEditCheck,
+                )}
                 onSave={newValue =>
                   handleCellSave([], [], originalValue, newValue)
                 }
@@ -2591,15 +2666,24 @@ export const TableRenderer = React.memo(props => {
                 theme={theme}
               />
             ) : (
-              <span
-                title={
-                  isModified
-                    ? `Modified from ${originalValue} to ${displayValue}`
-                    : ''
-                }
+              <CellTooltip
+                formattedValue={agg.format(displayValue)}
+                rawValue={displayValue}
+                title={metricForGrandTotalEditCheck}
+                isPercentage={checkIsPercentageMetric(
+                  metricForGrandTotalEditCheck,
+                )}
               >
-                {displayCell(agg.format(displayValue), allowRenderHtml)}
-              </span>
+                <span
+                  title={
+                    isModified
+                      ? `Modified from ${originalValue} to ${displayValue}`
+                      : ''
+                  }
+                >
+                  {displayCell(agg.format(displayValue), allowRenderHtml)}
+                </span>
+              </CellTooltip>
             )}
           </td>
         );

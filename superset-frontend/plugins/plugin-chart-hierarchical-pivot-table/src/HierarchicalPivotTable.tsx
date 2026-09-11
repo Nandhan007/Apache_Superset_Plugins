@@ -1666,6 +1666,10 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
               redirectionUrls={redirectionUrls}
               rawFormData={rawFormData}
               dashboardFilters={selectedFilters}
+              columnFormats={columnFormats}
+              valueFormat={valueFormat}
+              currencyFormat={currencyFormat}
+              currencyFormats={currencyFormats}
             />
           </PivotTableWrapper>
         </div>

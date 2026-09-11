@@ -440,6 +440,10 @@ const processColumns = memoizeOne(function processColumns(
         ? config.currencyFormat
         : savedCurrency;
 
+      const isPercentage =
+        isPercentMetric ||
+        (typeof numberFormat === 'string' && numberFormat.includes('%'));
+
       let formatter;
 
       if (isTime || config.d3TimeFormat) {
@@ -484,6 +488,7 @@ const processColumns = memoizeOne(function processColumns(
         isNumeric: dataType === GenericDataType.Numeric,
         isMetric,
         isPercentMetric,
+        isPercentage,
         formatter,
         config,
       };
