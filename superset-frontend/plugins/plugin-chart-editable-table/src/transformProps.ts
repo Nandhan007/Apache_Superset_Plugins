@@ -28,7 +28,6 @@ import {
   getNumberFormatter,
   getTimeFormatter,
   getTimeFormatterForGranularity,
-  NumberFormats,
   QueryMode,
   SMART_DATE_ID,
   TimeFormats,
@@ -45,6 +44,7 @@ import { notification } from 'antd';
 
 import { isEmpty, merge } from 'lodash';
 import { HierarchyFieldConfig } from './types/hierarchy';
+import { formatPercentageValue } from './utils/formatValue';
 
 function parseExpressionJson(expression: string, colName?: string): any {
   if (!expression) return null;
@@ -207,7 +207,6 @@ import {
   TableColumnConfig,
 } from './types';
 
-const { PERCENT_3_POINT } = NumberFormats;
 const { DATABASE_DATETIME } = TimeFormats;
 
 function isNumeric(key: string, data: DataRecord[] = []) {
@@ -472,7 +471,10 @@ const processColumns = memoizeOne(function processColumns(
         }
       } else if (isPercentMetric) {
         // percent metrics have a default format
-        formatter = getNumberFormatter(numberFormat || PERCENT_3_POINT);
+        formatter =
+          numberFormat && !numberFormat.includes('%')
+            ? getNumberFormatter(numberFormat)
+            : formatPercentageValue;
       } else if (isMetric || (isNumber && (numberFormat || currency))) {
         formatter = currency?.symbol
           ? new CurrencyFormatter({
@@ -528,7 +530,10 @@ const getComparisonColFormatter = (
     currentColConfig.d3NumberFormat || parentCol.config?.d3NumberFormat;
   let { formatter } = parentCol;
   if (label === '%') {
-    formatter = getNumberFormatter(currentColNumberFormat || PERCENT_3_POINT);
+    formatter =
+      currentColNumberFormat && !currentColNumberFormat.includes('%')
+        ? getNumberFormatter(currentColNumberFormat)
+        : formatPercentageValue;
   } else if (currentColNumberFormat || hasCurrency) {
     const currency = currentColConfig.currencyFormat || savedCurrency;
     const numberFormat = currentColNumberFormat || savedFormat;

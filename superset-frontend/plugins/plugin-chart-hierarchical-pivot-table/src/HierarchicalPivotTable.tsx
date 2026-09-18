@@ -157,6 +157,18 @@ const aggregatorsFactory = (formatter: NumberFormatter) => ({
  * function (https://github.com/apache/superset/blob/master/superset/charts/post_processing.py),
  * or reach out to @betodealmeida.
  */
+export const formatPercentageValue = (val: any): string => {
+  if (val === null || val === undefined || val === '') return '';
+  const num = Number(val);
+  if (isNaN(num)) return String(val);
+  const scaled = Number((num * 100).toFixed(6));
+  const rounded2 = Number(scaled.toFixed(2));
+  if (rounded2 % 1 === 0) {
+    return `${rounded2}%`;
+  }
+  return `${scaled.toFixed(2)}%`;
+};
+
 export default function HierarchicalPivotTable(props: PivotTableProps) {
   const {
     data,
@@ -733,6 +745,7 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
   // Use fetched columns if available, otherwise fall back to props (legacy/explore view behavior)
   const layoutAvailableColumns =
     fetchedColumns.length > 0 ? fetchedColumns : allColumns || [];
+
   const defaultFormatter = useMemo(
     () =>
       currencyFormat?.symbol
@@ -740,7 +753,9 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
             currency: currencyFormat,
             d3Format: valueFormat,
           })
-        : getNumberFormatter(valueFormat),
+        : typeof valueFormat === 'string' && valueFormat.includes('%')
+          ? formatPercentageValue
+          : getNumberFormatter(valueFormat),
     [valueFormat, currencyFormat],
   );
   const customFormatsArray = useMemo(
@@ -758,6 +773,13 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
     [columnFormats, currencyFormat, currencyFormats, valueFormat],
   );
   const hasCustomMetricFormatters = customFormatsArray.length > 0;
+  const percentMetricsList = useMemo(
+    () =>
+      Array.isArray(rawFormData?.percent_metrics)
+        ? rawFormData.percent_metrics
+        : [],
+    [rawFormData],
+  );
   const metricFormatters = useMemo(
     () =>
       hasCustomMetricFormatters
@@ -770,12 +792,15 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
                       currency,
                       d3Format,
                     })
-                  : getNumberFormatter(d3Format),
+                  : (typeof d3Format === 'string' && d3Format.includes('%')) ||
+                    percentMetricsList.includes(metric)
+                    ? formatPercentageValue
+                    : getNumberFormatter(d3Format),
               ]),
             ),
           }
         : undefined,
-    [customFormatsArray, hasCustomMetricFormatters],
+    [customFormatsArray, hasCustomMetricFormatters, percentMetricsList],
   );
 
   const metricNames = useMemo(

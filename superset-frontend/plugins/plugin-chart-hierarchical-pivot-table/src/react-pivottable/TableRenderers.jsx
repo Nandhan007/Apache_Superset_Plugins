@@ -281,6 +281,18 @@ const RedirectionMenu = ({
   );
 };
 
+export const formatPercentageValue = val => {
+  if (val === null || val === undefined || val === '') return '';
+  const num = Number(val);
+  if (isNaN(num)) return String(val);
+  const scaled = Number((num * 100).toFixed(6));
+  const rounded2 = Number(scaled.toFixed(2));
+  if (rounded2 % 1 === 0) {
+    return `${rounded2}%`;
+  }
+  return `${scaled.toFixed(2)}%`;
+};
+
 class EditableCell extends React.Component {
   static getEditValue(val, isPercentage) {
     if (
@@ -289,7 +301,13 @@ class EditableCell extends React.Component {
       val !== '' &&
       !isNaN(Number(val))
     ) {
-      const num = isPercentage ? Number(val) * 100 : Number(val);
+      const num = isPercentage
+        ? Number((Number(val) * 100).toFixed(6))
+        : Number(val);
+      const rounded2 = Number(num.toFixed(2));
+      if (rounded2 % 1 === 0) {
+        return String(rounded2);
+      }
       return num.toFixed(2);
     }
     return String(val ?? '');
@@ -346,7 +364,7 @@ class EditableCell extends React.Component {
     if (isValid && tempValue.trim() !== '') {
       let numValue = parseFloat(tempValue);
       if (isPercentage && !isNaN(numValue)) {
-        numValue = numValue / 100;
+        numValue = Number((numValue / 100).toFixed(4));
       }
       onSave(numValue);
     } else {
@@ -2042,7 +2060,12 @@ export const TableRenderer = React.memo(props => {
               />
             ) : (
               <CellTooltip
-                formattedValue={agg.format(displayValue)}
+                formattedValue={
+                  checkIsPercentageMetric(metricForEditCheck) &&
+                  typeof displayValue === 'number'
+                    ? formatPercentageValue(displayValue)
+                    : agg.format(displayValue)
+                }
                 rawValue={displayValue}
                 title={metricForEditCheck}
                 isPercentage={checkIsPercentageMetric(metricForEditCheck)}
@@ -2054,7 +2077,13 @@ export const TableRenderer = React.memo(props => {
                       : ''
                   }
                 >
-                  {displayCell(agg.format(displayValue), allowRenderHtml)}
+                  {displayCell(
+                    checkIsPercentageMetric(metricForEditCheck) &&
+                      typeof displayValue === 'number'
+                      ? formatPercentageValue(displayValue)
+                      : agg.format(displayValue),
+                    allowRenderHtml,
+                  )}
                 </span>
               </CellTooltip>
             )}
@@ -2145,7 +2174,12 @@ export const TableRenderer = React.memo(props => {
               />
             ) : (
               <CellTooltip
-                formattedValue={agg.format(displayValue)}
+                formattedValue={
+                  checkIsPercentageMetric(metricForTotalEditCheck) &&
+                  typeof displayValue === 'number'
+                    ? formatPercentageValue(displayValue)
+                    : agg.format(displayValue)
+                }
                 rawValue={displayValue}
                 title={metricForTotalEditCheck}
                 isPercentage={checkIsPercentageMetric(
@@ -2159,7 +2193,13 @@ export const TableRenderer = React.memo(props => {
                       : ''
                   }
                 >
-                  {displayCell(agg.format(displayValue), allowRenderHtml)}
+                  {displayCell(
+                    checkIsPercentageMetric(metricForTotalEditCheck) &&
+                      typeof displayValue === 'number'
+                      ? formatPercentageValue(displayValue)
+                      : agg.format(displayValue),
+                    allowRenderHtml,
+                  )}
                 </span>
               </CellTooltip>
             )}
@@ -2573,7 +2613,12 @@ export const TableRenderer = React.memo(props => {
               />
             ) : (
               <CellTooltip
-                formattedValue={agg.format(displayValue)}
+                formattedValue={
+                  checkIsPercentageMetric(metricForEditCheck) &&
+                  typeof displayValue === 'number'
+                    ? formatPercentageValue(displayValue)
+                    : agg.format(displayValue)
+                }
                 rawValue={displayValue}
                 title={metricForEditCheck}
                 isPercentage={checkIsPercentageMetric(metricForEditCheck)}
@@ -2585,7 +2630,13 @@ export const TableRenderer = React.memo(props => {
                       : ''
                   }
                 >
-                  {displayCell(agg.format(displayValue), allowRenderHtml)}
+                  {displayCell(
+                    checkIsPercentageMetric(metricForEditCheck) &&
+                      typeof displayValue === 'number'
+                      ? formatPercentageValue(displayValue)
+                      : agg.format(displayValue),
+                    allowRenderHtml,
+                  )}
                 </span>
               </CellTooltip>
             )}
@@ -2667,7 +2718,12 @@ export const TableRenderer = React.memo(props => {
               />
             ) : (
               <CellTooltip
-                formattedValue={agg.format(displayValue)}
+                formattedValue={
+                  checkIsPercentageMetric(metricForGrandTotalEditCheck) &&
+                  typeof displayValue === 'number'
+                    ? formatPercentageValue(displayValue)
+                    : agg.format(displayValue)
+                }
                 rawValue={displayValue}
                 title={metricForGrandTotalEditCheck}
                 isPercentage={checkIsPercentageMetric(
@@ -2681,7 +2737,13 @@ export const TableRenderer = React.memo(props => {
                       : ''
                   }
                 >
-                  {displayCell(agg.format(displayValue), allowRenderHtml)}
+                  {displayCell(
+                    checkIsPercentageMetric(metricForGrandTotalEditCheck) &&
+                      typeof displayValue === 'number'
+                      ? formatPercentageValue(displayValue)
+                      : agg.format(displayValue),
+                    allowRenderHtml,
+                  )}
                 </span>
               </CellTooltip>
             )}

@@ -56,11 +56,38 @@ function formatValue(
   return [false, value.toString()];
 }
 
+export function formatPercentageValue(val: any): string {
+  if (val === null || val === undefined || val === '') return '';
+  const num = Number(val);
+  if (isNaN(num)) return String(val);
+  const scaled = Number((num * 100).toFixed(6));
+  const rounded2 = Number(scaled.toFixed(2));
+  if (rounded2 % 1 === 0) {
+    return `${rounded2}%`;
+  }
+  return `${scaled.toFixed(2)}%`;
+}
+
 export function formatColumnValue(
   column: DataColumnMeta,
   value: DataRecordValue,
-) {
-  const { dataType, formatter, config = {} } = column;
+): [boolean, string] {
+  const { dataType, formatter, config = {}, isPercentage, isPercentMetric } = column;
+  const isPercent =
+    Boolean(isPercentage || isPercentMetric) ||
+    (typeof config?.d3NumberFormat === 'string' &&
+      config.d3NumberFormat.includes('%'));
+
+  if (
+    isPercent &&
+    value !== null &&
+    value !== undefined &&
+    value !== '' &&
+    !isNaN(Number(value))
+  ) {
+    return [false, formatPercentageValue(value)];
+  }
+
   const isNumber = dataType === GenericDataType.Numeric;
   const smallNumberFormatter =
     config.d3SmallNumberFormat === undefined

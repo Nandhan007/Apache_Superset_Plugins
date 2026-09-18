@@ -392,7 +392,13 @@ const EditableCell = ({
         val !== '' &&
         !isNaN(Number(val))
       ) {
-        const num = isPercentage ? Number(val) * 100 : Number(val);
+        const num = isPercentage
+          ? Number((Number(val) * 100).toFixed(6))
+          : Number(val);
+        const rounded2 = Number(num.toFixed(2));
+        if (rounded2 % 1 === 0) {
+          return String(rounded2);
+        }
         return num.toFixed(2);
       }
       return val ?? '';

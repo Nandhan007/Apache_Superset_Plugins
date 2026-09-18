@@ -11,11 +11,21 @@ export interface CellTooltipProps {
 
 const formatValueRounded = (val: any, isPercentage?: boolean) => {
   if (val === undefined || val === null || val === '') return '';
-  if (isPercentage) {
-    const num = Number(val);
-    if (!isNaN(num)) {
-      return num.toFixed(2);
+  const num = Number(val);
+  if (!isNaN(num)) {
+    if (isPercentage) {
+      const scaled = Number((num * 100).toFixed(6));
+      const rounded2 = Number(scaled.toFixed(2));
+      if (rounded2 % 1 === 0) {
+        return `${rounded2}%`;
+      }
+      return `${scaled.toFixed(2)}%`;
     }
+    const rounded2 = Number(num.toFixed(2));
+    if (rounded2 % 1 === 0) {
+      return String(rounded2);
+    }
+    return num.toFixed(2);
   }
   return String(val);
 };
