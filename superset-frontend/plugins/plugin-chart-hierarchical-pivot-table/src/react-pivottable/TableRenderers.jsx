@@ -17,7 +17,14 @@
  * under the License.
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { safeHtmlSpan } from '@superset-ui/core';
 import { t } from '@apache-superset/core/translation';
 import PropTypes from 'prop-types';
@@ -25,7 +32,7 @@ import { PivotData, flatKey, isColorDark, getCustomSortKey } from './utilities';
 import { Styles } from './Styles';
 import { css } from '@emotion/react';
 import axios from 'axios';
-import { CellTooltip } from '../components/CellTooltip';
+import { CellTooltip, formatValueRounded } from '../components/CellTooltip';
 import {
   Popover,
   Checkbox,
@@ -34,6 +41,8 @@ import {
   notification,
   Button,
   List,
+  Pagination,
+  message,
 } from 'antd';
 import {
   FilterOutlined,
@@ -503,6 +512,99 @@ export const TableRenderer = React.memo(props => {
   const [activeFilterMenu, setActiveFilterMenu] = useState(null);
   const [sortModel, setSortModel] = useState([]); // Array of { key, direction }
 
+  // Client-side pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
+  // Delegated Floating Tooltip State (Replaces 50,000 separate Tooltip components with 1 single shared instance)
+  const [activeTooltip, setActiveTooltip] = useState(null);
+  const [tooltipCopied, setTooltipCopied] = useState(false);
+  const tooltipTimeoutRef = useRef(null);
+
+  const fallbackCopy = useCallback(text => {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      setTooltipCopied(true);
+      message.success(t('Copied "%(val)s" to clipboard', { val: text }));
+      setTimeout(() => setTooltipCopied(false), 2000);
+    } catch (err) {
+      console.error('Copy fallback failed:', err);
+    }
+    document.body.removeChild(textArea);
+  }, []);
+
+  const handleCellMouseEnter = useCallback((e, rawValStr) => {
+    if (rawValStr === undefined || rawValStr === null || rawValStr === '')
+      return;
+    if (tooltipTimeoutRef.current) clearTimeout(tooltipTimeoutRef.current);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const showBelow = rect.top < 36;
+    setActiveTooltip({
+      x: rect.left + rect.width / 2,
+      y: showBelow ? rect.bottom + 4 : rect.top - 4,
+      placement: showBelow ? 'bottom' : 'top',
+      val: String(rawValStr),
+    });
+    setTooltipCopied(false);
+  }, []);
+
+  const handleCellMouseLeave = useCallback(() => {
+    tooltipTimeoutRef.current = setTimeout(() => {
+      setActiveTooltip(null);
+      setTooltipCopied(false);
+    }, 150);
+  }, []);
+
+  const handleTooltipMouseEnter = useCallback(() => {
+    if (tooltipTimeoutRef.current) clearTimeout(tooltipTimeoutRef.current);
+  }, []);
+
+  const handleTooltipMouseLeave = useCallback(() => {
+    setActiveTooltip(null);
+    setTooltipCopied(false);
+  }, []);
+
+  useEffect(() => {
+    if (!activeTooltip) return undefined;
+    const handleScroll = () => {
+      setActiveTooltip(null);
+      setTooltipCopied(false);
+    };
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [activeTooltip]);
+
+  const handleTooltipCopy = useCallback(
+    (e, text) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          () => {
+            setTooltipCopied(true);
+            message.success(t('Copied "%(val)s" to clipboard', { val: text }));
+            setTimeout(() => setTooltipCopied(false), 2000);
+          },
+          () => {
+            fallbackCopy(text);
+          },
+        );
+      } else {
+        fallbackCopy(text);
+      }
+    },
+    [fallbackCopy],
+  );
+
   const handleFilterChange = useCallback((key, value) => {
     setFilters(prev => ({
       ...prev,
@@ -529,6 +631,58 @@ export const TableRenderer = React.memo(props => {
       return true;
     });
   }, [data, filters]);
+
+  // O(1) Pre-indexed Map for row actions and redirection matching
+  const rowKeyToRecordMap = useMemo(() => {
+    if (
+      !filteredData ||
+      filteredData.length === 0 ||
+      initialRows.length === 0
+    ) {
+      return new Map();
+    }
+    const map = new Map();
+    for (let i = 0; i < filteredData.length; i++) {
+      const rec = filteredData[i];
+      const keyParts = [];
+      for (let j = 0; j < initialRows.length; j++) {
+        const attr = initialRows[j];
+        keyParts.push(rec[attr] !== undefined ? String(rec[attr]) : '');
+      }
+      const fKey = flatKey(keyParts);
+      if (!map.has(fKey)) {
+        map.set(fKey, rec);
+      }
+    }
+    return map;
+  }, [filteredData, initialRows]);
+
+  const findMatchingRecord = useCallback(
+    rowKey => {
+      if (!rowKey || rowKey.length === 0) return null;
+      const fullKey = flatKey(rowKey.map(String));
+      if (rowKeyToRecordMap.has(fullKey)) {
+        return rowKeyToRecordMap.get(fullKey);
+      }
+      // For subtotal or partial group rowKey
+      for (const [key, rec] of rowKeyToRecordMap.entries()) {
+        let match = true;
+        for (let idx = 0; idx < rowKey.length; idx++) {
+          const attr = initialRows[idx];
+          if (
+            rec[attr] !== undefined &&
+            String(rec[attr]) !== String(rowKey[idx])
+          ) {
+            match = false;
+            break;
+          }
+        }
+        if (match) return rec;
+      }
+      return null;
+    },
+    [rowKeyToRecordMap, initialRows],
+  );
 
   const resolvedBackendApiUrl =
     backendApiUrl ||
@@ -2046,9 +2200,7 @@ export const TableRenderer = React.memo(props => {
             onContextMenu={e => onContextMenu(e, colKey, rowKey)}
             style={cellStyle}
           >
-            {isEditing &&
-            isEditableMetric &&
-            !isSubtotalOrGrandTotal ? (
+            {isEditing && isEditableMetric && !isSubtotalOrGrandTotal ? (
               <EditableCell
                 value={displayValue}
                 isPercentage={checkIsPercentageMetric(metricForEditCheck)}
@@ -2059,33 +2211,38 @@ export const TableRenderer = React.memo(props => {
                 theme={theme}
               />
             ) : (
-              <CellTooltip
-                formattedValue={
-                  checkIsPercentageMetric(metricForEditCheck) &&
-                  typeof displayValue === 'number'
-                    ? formatPercentageValue(displayValue)
-                    : agg.format(displayValue)
+              <span
+                onMouseEnter={e =>
+                  handleCellMouseEnter(
+                    e,
+                    formatValueRounded(
+                      displayValue !== undefined && displayValue !== null
+                        ? displayValue
+                        : originalValue,
+                      checkIsPercentageMetric(metricForEditCheck),
+                    ),
+                  )
                 }
-                rawValue={displayValue}
-                title={metricForEditCheck}
-                isPercentage={checkIsPercentageMetric(metricForEditCheck)}
+                onMouseLeave={handleCellMouseLeave}
+                title={
+                  isModified
+                    ? `Modified from ${originalValue} to ${displayValue}`
+                    : ''
+                }
+                style={{
+                  display: 'inline-block',
+                  maxWidth: '100%',
+                  cursor: 'pointer',
+                }}
               >
-                <span
-                  title={
-                    isModified
-                      ? `Modified from ${originalValue} to ${displayValue}`
-                      : ''
-                  }
-                >
-                  {displayCell(
-                    checkIsPercentageMetric(metricForEditCheck) &&
-                      typeof displayValue === 'number'
-                      ? formatPercentageValue(displayValue)
-                      : agg.format(displayValue),
-                    allowRenderHtml,
-                  )}
-                </span>
-              </CellTooltip>
+                {displayCell(
+                  checkIsPercentageMetric(metricForEditCheck) &&
+                    typeof displayValue === 'number'
+                    ? formatPercentageValue(displayValue)
+                    : agg.format(displayValue),
+                  allowRenderHtml,
+                )}
+              </span>
             )}
           </td>
         );
@@ -2173,35 +2330,38 @@ export const TableRenderer = React.memo(props => {
                 theme={theme}
               />
             ) : (
-              <CellTooltip
-                formattedValue={
-                  checkIsPercentageMetric(metricForTotalEditCheck) &&
-                  typeof displayValue === 'number'
-                    ? formatPercentageValue(displayValue)
-                    : agg.format(displayValue)
+              <span
+                onMouseEnter={e =>
+                  handleCellMouseEnter(
+                    e,
+                    formatValueRounded(
+                      displayValue !== undefined && displayValue !== null
+                        ? displayValue
+                        : originalValue,
+                      checkIsPercentageMetric(metricForTotalEditCheck),
+                    ),
+                  )
                 }
-                rawValue={displayValue}
-                title={metricForTotalEditCheck}
-                isPercentage={checkIsPercentageMetric(
-                  metricForTotalEditCheck,
-                )}
+                onMouseLeave={handleCellMouseLeave}
+                title={
+                  isModified
+                    ? `Modified from ${originalValue} to ${displayValue}`
+                    : ''
+                }
+                style={{
+                  display: 'inline-block',
+                  maxWidth: '100%',
+                  cursor: 'pointer',
+                }}
               >
-                <span
-                  title={
-                    isModified
-                      ? `Modified from ${originalValue} to ${displayValue}`
-                      : ''
-                  }
-                >
-                  {displayCell(
-                    checkIsPercentageMetric(metricForTotalEditCheck) &&
-                      typeof displayValue === 'number'
-                      ? formatPercentageValue(displayValue)
-                      : agg.format(displayValue),
-                    allowRenderHtml,
-                  )}
-                </span>
-              </CellTooltip>
+                {displayCell(
+                  checkIsPercentageMetric(metricForTotalEditCheck) &&
+                    typeof displayValue === 'number'
+                    ? formatPercentageValue(displayValue)
+                    : agg.format(displayValue),
+                  allowRenderHtml,
+                )}
+              </span>
             )}
           </td>
         );
@@ -2239,30 +2399,7 @@ export const TableRenderer = React.memo(props => {
         }
 
         if (shouldRenderAction) {
-          const matchingRecord = filteredData.find(rec => {
-            for (let idx = 0; idx < rowAttrs.length; idx++) {
-              const attr = rowAttrs[idx];
-              if (
-                rec[attr] !== undefined &&
-                String(rec[attr]) !== String(rowKey[idx])
-              ) {
-                return false;
-              }
-            }
-            if (visibleColKeys && visibleColKeys.length > 0) {
-              const colKey = visibleColKeys[0];
-              for (let idx = 0; idx < colAttrs.length; idx++) {
-                const attr = colAttrs[idx];
-                if (
-                  rec[attr] !== undefined &&
-                  String(rec[attr]) !== String(colKey[idx])
-                ) {
-                  return false;
-                }
-              }
-            }
-            return true;
-          });
+          const matchingRecord = findMatchingRecord(rowKey);
 
           const rowData = matchingRecord ? { ...matchingRecord } : {};
           rowAttrs.forEach((attr, idx) => {
@@ -2358,30 +2495,7 @@ export const TableRenderer = React.memo(props => {
                       onChange={e => {
                         e.stopPropagation();
                         if (onRowSelectionChange) {
-                          const matchingRecord = filteredData.find(rec => {
-                            for (let idx = 0; idx < rowAttrs.length; idx++) {
-                              const attr = rowAttrs[idx];
-                              if (
-                                rec[attr] !== undefined &&
-                                String(rec[attr]) !== String(rowKey[idx])
-                              ) {
-                                return false;
-                              }
-                            }
-                            if (visibleColKeys && visibleColKeys.length > 0) {
-                              const colKey = visibleColKeys[0];
-                              for (let idx = 0; idx < colAttrs.length; idx++) {
-                                const attr = colAttrs[idx];
-                                if (
-                                  rec[attr] !== undefined &&
-                                  String(rec[attr]) !== String(colKey[idx])
-                                ) {
-                                  return false;
-                                }
-                              }
-                            }
-                            return true;
-                          });
+                          const matchingRecord = findMatchingRecord(rowKey);
 
                           const rowData = matchingRecord
                             ? { ...matchingRecord }
@@ -2412,30 +2526,7 @@ export const TableRenderer = React.memo(props => {
                       onChange={e => {
                         e.stopPropagation();
                         if (onRowSelectionChange) {
-                          const matchingRecord = filteredData.find(rec => {
-                            for (let idx = 0; idx < rowAttrs.length; idx++) {
-                              const attr = rowAttrs[idx];
-                              if (
-                                rec[attr] !== undefined &&
-                                String(rec[attr]) !== String(rowKey[idx])
-                              ) {
-                                return false;
-                              }
-                            }
-                            if (visibleColKeys && visibleColKeys.length > 0) {
-                              const colKey = visibleColKeys[0];
-                              for (let idx = 0; idx < colAttrs.length; idx++) {
-                                const attr = colAttrs[idx];
-                                if (
-                                  rec[attr] !== undefined &&
-                                  String(rec[attr]) !== String(colKey[idx])
-                                ) {
-                                  return false;
-                                }
-                              }
-                            }
-                            return true;
-                          });
+                          const matchingRecord = findMatchingRecord(rowKey);
 
                           const rowData = matchingRecord
                             ? { ...matchingRecord }
@@ -2492,6 +2583,9 @@ export const TableRenderer = React.memo(props => {
       redirectionUrls,
       rawFormData,
       dashboardFilters,
+      handleCellMouseEnter,
+      handleCellMouseLeave,
+      findMatchingRecord,
     ],
   );
 
@@ -2565,7 +2659,8 @@ export const TableRenderer = React.memo(props => {
         // When rowAttrs.length === 0, the main value cells with full colKey are editable data cells
         const isCellEditable =
           isEditableMetric &&
-          (rowAttrs.length === 0 && colKey.length === colAttrs.length);
+          rowAttrs.length === 0 &&
+          colKey.length === colAttrs.length;
 
         const isDarkMode = theme.colorBgBase
           ? isColorDark(theme.colorBgBase)
@@ -2612,33 +2707,38 @@ export const TableRenderer = React.memo(props => {
                 theme={theme}
               />
             ) : (
-              <CellTooltip
-                formattedValue={
-                  checkIsPercentageMetric(metricForEditCheck) &&
-                  typeof displayValue === 'number'
-                    ? formatPercentageValue(displayValue)
-                    : agg.format(displayValue)
+              <span
+                onMouseEnter={e =>
+                  handleCellMouseEnter(
+                    e,
+                    formatValueRounded(
+                      displayValue !== undefined && displayValue !== null
+                        ? displayValue
+                        : originalValue,
+                      checkIsPercentageMetric(metricForEditCheck),
+                    ),
+                  )
                 }
-                rawValue={displayValue}
-                title={metricForEditCheck}
-                isPercentage={checkIsPercentageMetric(metricForEditCheck)}
+                onMouseLeave={handleCellMouseLeave}
+                title={
+                  isModified
+                    ? `Modified from ${originalValue} to ${displayValue}`
+                    : ''
+                }
+                style={{
+                  display: 'inline-block',
+                  maxWidth: '100%',
+                  cursor: 'pointer',
+                }}
               >
-                <span
-                  title={
-                    isModified
-                      ? `Modified from ${originalValue} to ${displayValue}`
-                      : ''
-                  }
-                >
-                  {displayCell(
-                    checkIsPercentageMetric(metricForEditCheck) &&
-                      typeof displayValue === 'number'
-                      ? formatPercentageValue(displayValue)
-                      : agg.format(displayValue),
-                    allowRenderHtml,
-                  )}
-                </span>
-              </CellTooltip>
+                {displayCell(
+                  checkIsPercentageMetric(metricForEditCheck) &&
+                    typeof displayValue === 'number'
+                    ? formatPercentageValue(displayValue)
+                    : agg.format(displayValue),
+                  allowRenderHtml,
+                )}
+              </span>
             )}
           </td>
         );
@@ -2717,35 +2817,38 @@ export const TableRenderer = React.memo(props => {
                 theme={theme}
               />
             ) : (
-              <CellTooltip
-                formattedValue={
-                  checkIsPercentageMetric(metricForGrandTotalEditCheck) &&
-                  typeof displayValue === 'number'
-                    ? formatPercentageValue(displayValue)
-                    : agg.format(displayValue)
+              <span
+                onMouseEnter={e =>
+                  handleCellMouseEnter(
+                    e,
+                    formatValueRounded(
+                      displayValue !== undefined && displayValue !== null
+                        ? displayValue
+                        : originalValue,
+                      checkIsPercentageMetric(metricForGrandTotalEditCheck),
+                    ),
+                  )
                 }
-                rawValue={displayValue}
-                title={metricForGrandTotalEditCheck}
-                isPercentage={checkIsPercentageMetric(
-                  metricForGrandTotalEditCheck,
-                )}
+                onMouseLeave={handleCellMouseLeave}
+                title={
+                  isModified
+                    ? `Modified from ${originalValue} to ${displayValue}`
+                    : ''
+                }
+                style={{
+                  display: 'inline-block',
+                  maxWidth: '100%',
+                  cursor: 'pointer',
+                }}
               >
-                <span
-                  title={
-                    isModified
-                      ? `Modified from ${originalValue} to ${displayValue}`
-                      : ''
-                  }
-                >
-                  {displayCell(
-                    checkIsPercentageMetric(metricForGrandTotalEditCheck) &&
-                      typeof displayValue === 'number'
-                      ? formatPercentageValue(displayValue)
-                      : agg.format(displayValue),
-                    allowRenderHtml,
-                  )}
-                </span>
-              </CellTooltip>
+                {displayCell(
+                  checkIsPercentageMetric(metricForGrandTotalEditCheck) &&
+                    typeof displayValue === 'number'
+                    ? formatPercentageValue(displayValue)
+                    : agg.format(displayValue),
+                  allowRenderHtml,
+                )}
+              </span>
             )}
           </td>
         );
@@ -2776,6 +2879,8 @@ export const TableRenderer = React.memo(props => {
       metrics,
       metricsLayout,
       redirectionUrls,
+      handleCellMouseEnter,
+      handleCellMouseLeave,
     ],
   );
 
@@ -2852,11 +2957,32 @@ export const TableRenderer = React.memo(props => {
     cachedBasePivotSettings.pivotData,
   ]);
 
+  const totalRows = visibleRowKeys.length;
+  const isPaged = pageSize !== 'All' && totalRows > pageSize;
+  const startIndex = isPaged ? (page - 1) * pageSize : 0;
+  const endIndex = isPaged
+    ? Math.min(startIndex + pageSize, totalRows)
+    : totalRows;
+  const pagedRowKeys = isPaged
+    ? visibleRowKeys.slice(startIndex, endIndex)
+    : visibleRowKeys;
+
+  useEffect(() => {
+    setPage(1);
+  }, [filters, visibleRowKeys.length]);
+
+
   const pivotSettings = {
-    visibleRowKeys,
-    maxRowVisible: Math.max(...visibleRowKeys.map(k => k.length)),
+    visibleRowKeys: pagedRowKeys,
+    maxRowVisible:
+      pagedRowKeys.length > 0
+        ? Math.max(...pagedRowKeys.map(k => k.length))
+        : 0,
     visibleColKeys,
-    maxColVisible: Math.max(...visibleColKeys.map(k => k.length)),
+    maxColVisible:
+      visibleColKeys.length > 0
+        ? Math.max(...visibleColKeys.map(k => k.length))
+        : 0,
     // For row actions, we use a modified spanning logic to visually separate the table into distinct groups based on checkboxes.
     rowAttrSpans: (() => {
       if (hasRowActions || (redirectionUrls && redirectionUrls.length > 0)) {
@@ -2872,7 +2998,7 @@ export const TableRenderer = React.memo(props => {
           actionRowSpanIndex = rowAttrs.length - 2;
         }
 
-        const spans = calcAttrSpans(visibleRowKeys, rowAttrs.length);
+        const spans = calcAttrSpans(pagedRowKeys, rowAttrs.length);
         // We need to iterate through the calculated spans and adjust them so they don't cross checkbox boundaries.
         // A simpler approach is to treat the `actionRowSpanIndex` as the max depth for spanning continuity across groups.
         // Actually, if we just want horizontal lines separating the groups, the easiest way is to NOT allow ANY parent span
@@ -2888,7 +3014,6 @@ export const TableRenderer = React.memo(props => {
                 spans[i][j] = currentActionSpan;
               } else if (spans[i][j] === -1 && i > 0) {
                 // If it was supposed to be hidden (-1), we might need to reveal it if the previous block forced a break.
-                // We can check if the PREVIOUS row was the END of an action block.
               }
             }
           }
@@ -2897,12 +3022,12 @@ export const TableRenderer = React.memo(props => {
         const newSpans = [];
         let currentGroupKeys = [];
 
-        for (let i = 0; i < visibleRowKeys.length; i++) {
+        for (let i = 0; i < pagedRowKeys.length; i++) {
           // Check if this row is the start of a NEW action group
           let isNewGroup = false;
           if (currentGroupKeys.length > 0) {
             const prevKey = currentGroupKeys[currentGroupKeys.length - 1];
-            const currKey = visibleRowKeys[i];
+            const currKey = pagedRowKeys[i];
             for (let j = 0; j <= actionRowSpanIndex; j++) {
               if (currKey[j] !== prevKey[j]) {
                 isNewGroup = true;
@@ -2916,13 +3041,13 @@ export const TableRenderer = React.memo(props => {
             const groupSpans = calcAttrSpans(currentGroupKeys, rowAttrs.length);
             newSpans.push(...groupSpans);
             // Start a new group
-            currentGroupKeys = [visibleRowKeys[i]];
+            currentGroupKeys = [pagedRowKeys[i]];
           } else {
-            currentGroupKeys.push(visibleRowKeys[i]);
+            currentGroupKeys.push(pagedRowKeys[i]);
           }
 
           // If it's the very last row, we need to process the remaining group
-          if (i === visibleRowKeys.length - 1 && currentGroupKeys.length > 0) {
+          if (i === pagedRowKeys.length - 1 && currentGroupKeys.length > 0) {
             const groupSpans = calcAttrSpans(currentGroupKeys, rowAttrs.length);
             newSpans.push(...groupSpans);
           }
@@ -2930,9 +3055,9 @@ export const TableRenderer = React.memo(props => {
 
         return newSpans.length > 0
           ? newSpans
-          : calcAttrSpans(visibleRowKeys, rowAttrs.length);
+          : calcAttrSpans(pagedRowKeys, rowAttrs.length);
       }
-      return calcAttrSpans(visibleRowKeys, rowAttrs.length);
+      return calcAttrSpans(pagedRowKeys, rowAttrs.length);
     })(),
     colAttrSpans: calcAttrSpans(visibleColKeys, colAttrs.length),
     allowRenderHtml,
@@ -2959,6 +3084,7 @@ export const TableRenderer = React.memo(props => {
     }
   }, [onRegisterReset]);
 
+
   useEffect(() => {
     if (onFilterChange) {
       onFilterChange(filters);
@@ -2968,16 +3094,113 @@ export const TableRenderer = React.memo(props => {
   return (
     <Styles isDashboardEditMode={isDashboardEditMode()}>
       <div css={modifiedCellsStyle}>
+        {activeTooltip &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              onMouseEnter={handleTooltipMouseEnter}
+              onMouseLeave={handleTooltipMouseLeave}
+              onClick={e => handleTooltipCopy(e, activeTooltip.val)}
+              title={tooltipCopied ? t('Copied!') : t('Click to copy value')}
+              style={{
+                position: 'fixed',
+                left: activeTooltip.x,
+                top: activeTooltip.y,
+                transform:
+                  activeTooltip.placement === 'bottom'
+                    ? 'translate(-50%, 0)'
+                    : 'translate(-50%, -100%)',
+                zIndex: 10000,
+                backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                color: '#fff',
+                padding: '3px 8px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                userSelect: 'text',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)',
+                whiteSpace: 'nowrap',
+                pointerEvents: 'auto',
+              }}
+            >
+              {activeTooltip.val}
+            </div>,
+            document.body,
+          )}
         <table className="pvtTable" role="grid">
           <thead>
             {colAttrs.map((c, j) => renderColHeaderRow(c, j, pivotSettings))}
             {rowAttrs.length !== 0 && renderRowHeaderRow(pivotSettings)}
           </thead>
           <tbody>
-            {visibleRowKeys.map((r, i) => renderTableRow(r, i, pivotSettings))}
+            {pagedRowKeys.map((r, i) => renderTableRow(r, i, pivotSettings))}
             {colTotals && renderTotalsRow(pivotSettings)}
           </tbody>
         </table>
+        {totalRows > 25 && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '10px 12px',
+              borderTop: '1px solid #e8e8e8',
+              background: theme.colorBgContainer || '#fff',
+              flexWrap: 'wrap',
+              gap: '8px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', color: '#666' }}>
+                {t('Showing %(start)s to %(end)s of %(total)s entries', {
+                  start: totalRows === 0 ? 0 : startIndex + 1,
+                  end: endIndex,
+                  total: totalRows,
+                })}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Pagination
+                size="small"
+                current={page}
+                pageSize={pageSize === 'All' ? totalRows : pageSize}
+                total={totalRows}
+                showSizeChanger
+                pageSizeOptions={['25', '50', '100', '200', '500']}
+                onChange={(newPage, newPageSize) => {
+                  setPage(newPage);
+                  if (newPageSize !== pageSize) {
+                    setPageSize(newPageSize);
+                    setPage(1);
+                  }
+                }}
+              />
+              {pageSize !== 'All' && totalRows > pageSize && (
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setPageSize('All');
+                    setPage(1);
+                  }}
+                >
+                  {t('View All')}
+                </Button>
+              )}
+              {pageSize === 'All' && totalRows > 50 && (
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setPageSize(50);
+                    setPage(1);
+                  }}
+                >
+                  {t('Paginate')}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </Styles>
   );

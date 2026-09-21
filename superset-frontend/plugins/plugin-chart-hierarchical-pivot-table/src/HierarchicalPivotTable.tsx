@@ -793,7 +793,7 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
                       d3Format,
                     })
                   : (typeof d3Format === 'string' && d3Format.includes('%')) ||
-                    percentMetricsList.includes(metric)
+                      percentMetricsList.includes(metric)
                     ? formatPercentageValue
                     : getNumberFormatter(d3Format),
               ]),
@@ -826,23 +826,32 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
     return map;
   }, [verboseMap, fetchedMetrics, fetchedColumns]);
 
-  const unpivotedData = useMemo(
-    () =>
-      data.reduce(
-        (acc: Record<string, any>[], record: Record<string, any>) => [
-          ...acc,
-          ...metricNames
-            .map((name: string) => ({
-              ...record,
-              [METRIC_KEY]: name,
-              value: record[name],
-            }))
-            .filter(record => record.value !== null),
-        ],
-        [],
-      ),
-    [data, metricNames],
-  );
+  const unpivotedData = useMemo(() => {
+    if (
+      !data ||
+      data.length === 0 ||
+      !metricNames ||
+      metricNames.length === 0
+    ) {
+      return [];
+    }
+    const result: Record<string, any>[] = [];
+    for (let i = 0; i < data.length; i++) {
+      const record = data[i];
+      for (let j = 0; j < metricNames.length; j++) {
+        const name = metricNames[j];
+        const val = record[name];
+        if (val !== null && val !== undefined) {
+          result.push({
+            ...record,
+            [METRIC_KEY]: name,
+            value: val,
+          });
+        }
+      }
+    }
+    return result;
+  }, [data, metricNames]);
   const groupbyRows = useMemo(
     () => groupbyRowsRaw.map(getColumnLabel),
     [groupbyRowsRaw],
@@ -969,6 +978,7 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
     }
     return [rows_, cols_];
   }, [combineMetric, layoutCols, layoutRows, metricsLayout, transposePivot]);
+
 
   const handleSaveLayout = (newRows: string[], newCols: string[]) => {
     setLayoutRows(newRows);
@@ -1335,13 +1345,14 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
                         ((Array.isArray(f.name)
                           ? f.name.includes(h.fieldName) ||
                             f.name.includes(h.columnName)
-                          : f.name === h.fieldName || f.name === h.columnName) ||
-                         (f.hierarchyGroup &&
-                          (h.hierarchyGroup || (h as any).hierarchy_group) &&
-                          f.hierarchyGroup.toLowerCase().trim() ===
-                            (h.hierarchyGroup || (h as any).hierarchy_group)
-                              .toLowerCase()
-                              .trim())),
+                          : f.name === h.fieldName ||
+                            f.name === h.columnName) ||
+                          (f.hierarchyGroup &&
+                            (h.hierarchyGroup || (h as any).hierarchy_group) &&
+                            f.hierarchyGroup.toLowerCase().trim() ===
+                              (h.hierarchyGroup || (h as any).hierarchy_group)
+                                .toLowerCase()
+                                .trim())),
                     ),
                 )}
                 formFields={[
@@ -1462,7 +1473,9 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
                   size="small"
                   icon={renderIcon(action.buttonIcon)}
                   onClick={() => handleHtmlActionClick(action)}
-                  disabled={!action.isGlobalCustomView && selectedRowData.size === 0}
+                  disabled={
+                    !action.isGlobalCustomView && selectedRowData.size === 0
+                  }
                 >
                   {action.buttonLabel}
                 </Button>
