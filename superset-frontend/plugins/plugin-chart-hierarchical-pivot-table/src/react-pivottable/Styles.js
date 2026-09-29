@@ -21,6 +21,39 @@ import { css, styled } from '@apache-superset/core/theme';
 
 export const Styles = styled.div`
   ${({ theme, isDashboardEditMode }) => css`
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    min-width: 0;
+
+    .pvtTableContainer {
+      flex: 1 1 auto;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      min-height: 0;
+      min-width: 0;
+      position: relative;
+    }
+
+    .pvtPaginationContainer {
+      flex: 0 0 auto;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      border-top: 1px solid ${theme.colorSplit || '#e8e8e8'};
+      background: ${theme.colorBgContainer || '#ffffff'};
+      flex-wrap: wrap;
+      gap: 8px;
+      box-sizing: border-box;
+      z-index: 6;
+    }
+
     table.pvtTable {
       position: ${isDashboardEditMode ? 'inherit' : 'relative'};
       width: calc(100% - ${theme.sizeUnit}px);

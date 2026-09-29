@@ -19,14 +19,15 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useDrag, useDrop, DndProvider, DndContext } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { Modal, Tabs, Input, Checkbox, List } from 'antd';
-import { CheckOutlined } from '@ant-design/icons';
+import { Modal, Tabs, Input, Checkbox } from 'antd';
+import { CheckOutlined, MenuOutlined } from '@ant-design/icons';
 import { t } from '@apache-superset/core/translation';
 import { styled, useTheme, SupersetTheme } from '@apache-superset/core/theme';
 import { DatasourceColumn, DatasourceMetric } from './types';
 
 const ItemTypes = {
   CARD: 'card',
+  METRIC: 'metric',
 };
 
 // Safe DnD Provider Wrapper using Single Manager on Window
@@ -212,6 +213,104 @@ const Card: React.FC<CardProps> = ({
   );
 };
 
+const DraggableMetricItem = styled.div<DraggableItemProps>`
+  padding: ${({ theme }) => theme.sizeUnit * 1.5}px ${({ theme }) => theme.sizeUnit * 2}px;
+  margin-bottom: ${({ theme }) => theme.sizeUnit}px;
+  background-color: ${({ theme, $isSelected }) =>
+    $isSelected ? theme.colorPrimaryBg || '#e6f7ff' : theme.colorBgBase};
+  border: 1px solid
+    ${({ theme, $isSelected }) =>
+      $isSelected ? theme.colorPrimary : theme.colorSplit};
+  border-radius: ${({ theme }) => theme.borderRadius}px;
+  cursor: pointer;
+  opacity: ${({ $isDragging }) => ($isDragging ? 0.5 : 1)};
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+  color: ${({ theme, $isSelected }) =>
+    $isSelected ? theme.colorPrimary : theme.colorText};
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colorPrimary};
+    background-color: ${({ theme, $isSelected }) =>
+      !$isSelected ? theme.colorBgLayout || '#f5f5f5' : undefined};
+  }
+`;
+
+interface MetricCardProps {
+  id: string;
+  text: string;
+  index: number;
+  isSelected: boolean;
+  moveCard: (dragId: string, hoverId: string) => void;
+  toggleSelection: (id: string) => void;
+}
+
+const MetricCard: React.FC<MetricCardProps> = ({
+  id,
+  text,
+  index,
+  isSelected,
+  moveCard,
+  toggleSelection,
+}) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const theme = useTheme();
+
+  const [{ isDragging }, drag] = useDrag<
+    { type: string; id: string; index: number },
+    unknown,
+    { isDragging: boolean }
+  >({
+    item: { type: ItemTypes.METRIC, id, index },
+    collect: monitor => ({
+      isDragging: monitor.isDragging(),
+    }),
+  });
+
+  const [, drop] = useDrop({
+    accept: ItemTypes.METRIC,
+    hover(item: { type: string; id: string; index: number }) {
+      if (!ref.current) return;
+      const dragId = item.id;
+      const hoverId = id;
+
+      if (dragId === hoverId) return;
+
+      moveCard(dragId, hoverId);
+      item.index = index;
+    },
+  });
+
+  drag(drop(ref));
+
+  return (
+    <DraggableMetricItem
+      ref={ref}
+      $isDragging={isDragging}
+      $isSelected={isSelected}
+      theme={theme}
+      onClick={() => toggleSelection(id)}
+    >
+      <MenuOutlined
+        style={{
+          marginRight: 10,
+          color: isSelected ? theme.colorPrimary : theme.colorTextSecondary,
+          cursor: 'grab',
+          fontSize: '13px',
+        }}
+      />
+      <Checkbox
+        checked={isSelected}
+        style={{ marginRight: 10 }}
+        onClick={e => e.stopPropagation()}
+        onChange={() => toggleSelection(id)}
+      />
+      <span style={{ flex: 1, userSelect: 'none' }}>{text}</span>
+    </DraggableMetricItem>
+  );
+};
+
 interface SectionDropZoneProps {
   listType: 'rows' | 'cols';
   moveCard: (
@@ -255,13 +354,13 @@ const SectionDropZone: React.FC<SectionDropZoneProps> = ({
 interface LayoutEditorProps {
   visible: boolean;
   onCancel: () => void;
-  onSave: (newRows: string[], newCols: string[]) => void;
+  onSave: (newRows: string[], newCols: string[], newMetrics?: string[]) => void;
   initialRows: string[];
   initialCols: string[];
   allColumns: DatasourceColumn[];
   initialMetrics: string[];
   allMetrics: DatasourceMetric[];
-  onSaveMetrics: (newMetrics: string[]) => void;
+  onSaveMetrics?: (newMetrics: string[]) => void;
   mountNode?: HTMLElement | null;
 }
 
@@ -313,31 +412,43 @@ export default function LayoutEditor({
       setRowItems(initialRowItems);
 
       // Metrics Initialization
-      // Merge available metrics from datasource with any currently selected (adhoc) metrics to ensure nothing is lost
-      // Map to unique list
+      // 1. Maintain configured metrics FIRST in their exact initialMetrics order!
       const initialMetricSet = new Set(initialMetrics);
       setSelectedMetricKeys(initialMetricSet);
 
-      // Combine all known metrics
-      const allKnownMetricsMap = new Map<string, DatasourceMetric>();
-
-      // Add all from datasource
+      const metricMap = new Map<string, DatasourceMetric>();
       allMetrics.forEach(m => {
-        // Handle potential duplicate names if API returns them? Assuming unique metric_name
-        allKnownMetricsMap.set(m.metric_name, m);
-      });
-
-      // Add currently selected if missing (adhoc metrics might just be strings)
-      initialMetrics.forEach(mName => {
-        if (!allKnownMetricsMap.has(mName)) {
-          allKnownMetricsMap.set(mName, {
-            metric_name: mName,
-            verbose_name: mName,
-          });
+        if (m && m.metric_name) {
+          metricMap.set(m.metric_name, m);
         }
       });
 
-      setMetricItems(Array.from(allKnownMetricsMap.values()));
+      const orderedSelectedMetrics: DatasourceMetric[] = [];
+      const seen = new Set<string>();
+
+      initialMetrics.forEach(mName => {
+        if (mName && !seen.has(mName)) {
+          seen.add(mName);
+          const found = metricMap.get(mName);
+          orderedSelectedMetrics.push(
+            found || {
+              metric_name: mName,
+              verbose_name: mName,
+            },
+          );
+        }
+      });
+
+      // 2. Append unselected metrics from allMetrics after configured metrics
+      const remainingMetrics: DatasourceMetric[] = [];
+      allMetrics.forEach(m => {
+        if (m && m.metric_name && !seen.has(m.metric_name)) {
+          seen.add(m.metric_name);
+          remainingMetrics.push(m);
+        }
+      });
+
+      setMetricItems([...orderedSelectedMetrics, ...remainingMetrics]);
     }
   }, [
     visible,
@@ -472,17 +583,26 @@ export default function LayoutEditor({
     });
   }, []);
 
+  const moveMetricCard = useCallback((dragId: string, hoverId: string) => {
+    setMetricItems(prevItems => {
+      const dragIndex = prevItems.findIndex(m => m.metric_name === dragId);
+      const hoverIndex = prevItems.findIndex(m => m.metric_name === hoverId);
+      if (dragIndex === -1 || hoverIndex === -1 || dragIndex === hoverIndex) {
+        return prevItems;
+      }
+      const newItems = [...prevItems];
+      const [removed] = newItems.splice(dragIndex, 1);
+      newItems.splice(hoverIndex, 0, removed);
+      return newItems;
+    });
+  }, []);
+
   const handleOk = () => {
     // 1. Layout Save
     const finalRows = rowItems.filter(id => selectedRowKeys.has(id));
     const finalCols = colItems.filter(id => selectedColKeys.has(id));
-    onSave(finalRows, finalCols);
 
-    // 2. Metrics Save
-    // Return order is not strictly draggable here, so we might want to respect some order?
-    // For now, let's keep the order of 'metricItems' but filtered by selection?
-    // Or better: Preserve the order of initialMetrics for those that remain, and append new ones at the end?
-    // Simplified: Just filter metricItems by selection
+    // 2. Metrics Save (Order strictly maintained from metricItems)
     const finalMetrics = metricItems
       .filter(m => selectedMetricKeys.has(m.metric_name))
       .map(m => m.metric_name);
@@ -490,6 +610,7 @@ export default function LayoutEditor({
     if (onSaveMetrics) {
       onSaveMetrics(finalMetrics);
     }
+    onSave(finalRows, finalCols, finalMetrics);
   };
 
   return (
@@ -506,14 +627,14 @@ export default function LayoutEditor({
       styles={mountNode ? { mask: { position: 'absolute' } } : undefined}
       centered
     >
-      <Tabs
-        defaultActiveKey="layout"
-        items={[
-          {
-            key: 'layout',
-            label: t('Layout'),
-            children: (
-              <SingletonDndProvider>
+      <SingletonDndProvider>
+        <Tabs
+          defaultActiveKey="layout"
+          items={[
+            {
+              key: 'layout',
+              label: t('Layout'),
+              children: (
                 <Container>
                   <SectionDropZone listType="rows" moveCard={moveCard}>
                     {rowItems.map((row, index) => (
@@ -545,47 +666,47 @@ export default function LayoutEditor({
                     ))}
                   </SectionDropZone>
                 </Container>
-              </SingletonDndProvider>
-            ),
-          },
-          {
-            key: 'data',
-            label: t('Data'),
-            children: (
-              <Container style={{ flexDirection: 'column', height: '500px' }}>
-                <div style={{ padding: '8px 16px' }}>
-                  <Input.Search
-                    placeholder={t('Search measures')}
-                    onChange={e => setSearchText(e.target.value)}
-                    style={{ marginBottom: 8 }}
-                  />
-                </div>
-                <Section style={{ border: 'none', padding: '0 16px' }}>
-                  <List
-                    dataSource={metricItems.filter(item =>
-                      (item.verbose_name || item.metric_name || '')
-                        .toLowerCase()
-                        .includes(searchText.toLowerCase()),
-                    )}
-                    renderItem={item => (
-                      <List.Item style={{ padding: '8px 0' }}>
-                        <Checkbox
-                          checked={selectedMetricKeys.has(item.metric_name)}
-                          onChange={() =>
-                            toggleMetricSelection(item.metric_name)
-                          }
-                        >
-                          {item.verbose_name || item.metric_name}
-                        </Checkbox>
-                      </List.Item>
-                    )}
-                  />
-                </Section>
-              </Container>
-            ),
-          },
-        ]}
-      />
+              ),
+            },
+            {
+              key: 'data',
+              label: t('Data'),
+              children: (
+                <Container style={{ flexDirection: 'column', height: '500px' }}>
+                  <div style={{ padding: '8px 16px' }}>
+                    <Input.Search
+                      placeholder={t('Search measures')}
+                      value={searchText}
+                      onChange={e => setSearchText(e.target.value)}
+                      allowClear
+                      style={{ marginBottom: 8 }}
+                    />
+                  </div>
+                  <Section style={{ border: 'none', padding: '0 16px', overflowY: 'auto' }}>
+                    {metricItems
+                      .filter(item =>
+                        (item.verbose_name || item.metric_name || '')
+                          .toLowerCase()
+                          .includes(searchText.toLowerCase()),
+                      )
+                      .map((item, index) => (
+                        <MetricCard
+                          key={item.metric_name}
+                          id={item.metric_name}
+                          text={item.verbose_name || item.metric_name}
+                          index={index}
+                          isSelected={selectedMetricKeys.has(item.metric_name)}
+                          moveCard={moveMetricCard}
+                          toggleSelection={toggleMetricSelection}
+                        />
+                      ))}
+                  </Section>
+                </Container>
+              ),
+            },
+          ]}
+        />
+      </SingletonDndProvider>
     </Modal>
   );
 }

@@ -23,7 +23,6 @@ import {
   Modal,
   Tabs,
   Input,
-  List,
   Button,
   Checkbox as AntCheckbox,
 } from 'antd';
@@ -85,6 +84,7 @@ const ManagerRegistrar: React.FC<{ children: React.ReactNode }> = ({
 
 const ItemTypes = {
   CARD: 'card',
+  METRIC: 'metric',
 };
 
 const Container = styled.div`
@@ -195,15 +195,13 @@ const Card: React.FC<CardProps> = React.memo(
         onClick={() => toggleSelection(id, listType)}
       >
         <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-          {listType !== 'metrics' && (
-            <MenuOutlined
-              style={{
-                marginRight: 8,
-                color: theme.colorTextSecondary,
-                cursor: 'grab',
-              }}
-            />
-          )}
+          <MenuOutlined
+            style={{
+              marginRight: 8,
+              color: theme.colorTextSecondary,
+              cursor: 'grab',
+            }}
+          />
           <AntCheckbox
             checked={isSelected}
             style={{ marginRight: 8 }}
@@ -211,6 +209,73 @@ const Card: React.FC<CardProps> = React.memo(
             onChange={() => toggleSelection(id, listType)}
           />
           <span style={{ flex: 1 }}>{text}</span>
+        </div>
+      </DraggableItem>
+    );
+  },
+);
+
+interface MetricCardProps {
+  id: string;
+  text: string;
+  index: number;
+  isSelected: boolean;
+  moveCard: (dragId: string, hoverId: string) => void;
+  toggleSelection: (id: string) => void;
+}
+
+const MetricCard: React.FC<MetricCardProps> = React.memo(
+  ({ id, text, index, isSelected, moveCard, toggleSelection }) => {
+    const ref = useRef<HTMLDivElement>(null);
+    const theme = useTheme();
+
+    const [{ isDragging }, drag] = useDrag<any, any, any>({
+      item: { type: ItemTypes.METRIC, id, index },
+      collect: (monitor: any) => ({
+        isDragging: monitor.isDragging(),
+      }),
+    } as any);
+
+    const [, drop] = useDrop({
+      accept: ItemTypes.METRIC,
+      hover(item: any) {
+        if (!ref.current) return;
+        const dragId = item.id;
+        const hoverId = id;
+
+        if (dragId === hoverId) return;
+
+        moveCard(dragId, hoverId);
+        item.index = index;
+      },
+    });
+
+    drag(drop(ref));
+
+    return (
+      <DraggableItem
+        ref={ref}
+        $isDragging={isDragging}
+        $isSelected={isSelected}
+        theme={theme}
+        onClick={() => toggleSelection(id)}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+          <MenuOutlined
+            style={{
+              marginRight: 8,
+              color: isSelected ? theme.colorPrimary : theme.colorTextSecondary,
+              cursor: 'grab',
+              fontSize: '13px',
+            }}
+          />
+          <AntCheckbox
+            checked={isSelected}
+            style={{ marginRight: 8 }}
+            onClick={e => e.stopPropagation()}
+            onChange={() => toggleSelection(id)}
+          />
+          <span style={{ flex: 1, userSelect: 'none' }}>{text}</span>
         </div>
       </DraggableItem>
     );
@@ -317,25 +382,43 @@ export default function LayoutEditor({
       setSelectedKeys(new Set(combined));
 
       // Metrics Initialization
+      // 1. Maintain configured metrics FIRST in their exact initialMetrics order!
       const initialMetricSet = new Set(initialMetrics);
       setSelectedMetricKeys(initialMetricSet);
 
-      const allKnownMetricsMap = new Map<string, DatasourceMetric>();
-
+      const metricMap = new Map<string, DatasourceMetric>();
       allMetrics.forEach(m => {
-        allKnownMetricsMap.set(m.metric_name, m);
-      });
-
-      initialMetrics.forEach(mName => {
-        if (!allKnownMetricsMap.has(mName)) {
-          allKnownMetricsMap.set(mName, {
-            metric_name: mName,
-            verbose_name: mName,
-          });
+        if (m && m.metric_name) {
+          metricMap.set(m.metric_name, m);
         }
       });
 
-      setMetricItems(Array.from(allKnownMetricsMap.values()));
+      const orderedSelectedMetrics: DatasourceMetric[] = [];
+      const seen = new Set<string>();
+
+      initialMetrics.forEach(mName => {
+        if (mName && !seen.has(mName)) {
+          seen.add(mName);
+          const found = metricMap.get(mName);
+          orderedSelectedMetrics.push(
+            found || {
+              metric_name: mName,
+              verbose_name: mName,
+            },
+          );
+        }
+      });
+
+      // 2. Append unselected metrics from allMetrics after configured metrics
+      const remainingMetrics: DatasourceMetric[] = [];
+      allMetrics.forEach(m => {
+        if (m && m.metric_name && !seen.has(m.metric_name)) {
+          seen.add(m.metric_name);
+          remainingMetrics.push(m);
+        }
+      });
+
+      setMetricItems([...orderedSelectedMetrics, ...remainingMetrics]);
     }
   }, [
     visible,
@@ -363,17 +446,19 @@ export default function LayoutEditor({
     [],
   );
 
-  const moveMetricCard = useCallback(
-    (dragIndex: number, hoverIndex: number) => {
-      setMetricItems(prevItems => {
-        const newItems = [...prevItems];
-        const [removed] = newItems.splice(dragIndex, 1);
-        newItems.splice(hoverIndex, 0, removed);
-        return newItems;
-      });
-    },
-    [],
-  );
+  const moveMetricCard = useCallback((dragId: string, hoverId: string) => {
+    setMetricItems(prevItems => {
+      const dragIndex = prevItems.findIndex(m => m.metric_name === dragId);
+      const hoverIndex = prevItems.findIndex(m => m.metric_name === hoverId);
+      if (dragIndex === -1 || hoverIndex === -1 || dragIndex === hoverIndex) {
+        return prevItems;
+      }
+      const newItems = [...prevItems];
+      const [removed] = newItems.splice(dragIndex, 1);
+      newItems.splice(hoverIndex, 0, removed);
+      return newItems;
+    });
+  }, []);
 
   const toggleSelection = useCallback(
     (key: string, listType: 'rows' | 'cols' | 'metrics') => {
@@ -517,21 +602,17 @@ export default function LayoutEditor({
                       borderRadius: 4,
                     }}
                   >
-                    <List
-                      dataSource={filteredMetrics}
-                      renderItem={(item, index) => (
-                        <Card
-                          key={item.metric_name}
-                          id={item.metric_name}
-                          index={index}
-                          listType="metrics"
-                          text={item.verbose_name || item.metric_name}
-                          moveCard={moveMetricCard as any}
-                          isSelected={selectedMetricKeys.has(item.metric_name)}
-                          toggleSelection={id => toggleMetricSelection(id)}
-                        />
-                      )}
-                    />
+                    {filteredMetrics.map((item, index) => (
+                      <MetricCard
+                        key={item.metric_name}
+                        id={item.metric_name}
+                        index={index}
+                        text={item.verbose_name || item.metric_name}
+                        moveCard={moveMetricCard}
+                        isSelected={selectedMetricKeys.has(item.metric_name)}
+                        toggleSelection={toggleMetricSelection}
+                      />
+                    ))}
                   </div>
                 </div>
               ),

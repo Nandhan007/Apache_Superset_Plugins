@@ -90,9 +90,16 @@ const Styles = styled.div<PivotTableStylesProps>`
 `;
 
 const PivotTableWrapper = styled.div`
+  flex: 1 1 auto;
   height: 100%;
+  width: 100%;
   max-width: inherit;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  min-height: 0;
+  min-width: 0;
 `;
 
 const METRIC_KEY = t('Metric');
@@ -811,6 +818,17 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
     [metrics],
   );
 
+  const [layoutMetrics, setLayoutMetrics] = useState<string[]>([]);
+
+  useEffect(() => {
+    setLayoutMetrics(metricNames);
+  }, [metricNames]);
+
+  const effectiveMetricNames = useMemo(
+    () => (layoutMetrics.length > 0 ? layoutMetrics : metricNames),
+    [layoutMetrics, metricNames],
+  );
+
   const enhancedVerboseMap = useMemo(() => {
     const map = { ...verboseMap };
     fetchedMetrics.forEach(m => {
@@ -830,16 +848,16 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
     if (
       !data ||
       data.length === 0 ||
-      !metricNames ||
-      metricNames.length === 0
+      !effectiveMetricNames ||
+      effectiveMetricNames.length === 0
     ) {
       return [];
     }
     const result: Record<string, any>[] = [];
     for (let i = 0; i < data.length; i++) {
       const record = data[i];
-      for (let j = 0; j < metricNames.length; j++) {
-        const name = metricNames[j];
+      for (let j = 0; j < effectiveMetricNames.length; j++) {
+        const name = effectiveMetricNames[j];
         const val = record[name];
         if (val !== null && val !== undefined) {
           result.push({
@@ -851,7 +869,7 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
       }
     }
     return result;
-  }, [data, metricNames]);
+  }, [data, effectiveMetricNames]);
   const groupbyRows = useMemo(
     () => groupbyRowsRaw.map(getColumnLabel),
     [groupbyRowsRaw],
@@ -866,7 +884,7 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
   const [isLayoutEditorVisible, setIsLayoutEditorVisible] = useState(false);
 
   const sorters = useMemo(() => {
-    const metricSorters = { [METRIC_KEY]: sortAs(metricNames) };
+    const metricSorters = { [METRIC_KEY]: sortAs(effectiveMetricNames) };
 
     const timeSorters: Record<string, (a: any, b: any) => number> = {};
 
@@ -980,20 +998,31 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
   }, [combineMetric, layoutCols, layoutRows, metricsLayout, transposePivot]);
 
 
-  const handleSaveLayout = (newRows: string[], newCols: string[]) => {
+  const handleSaveLayout = (
+    newRows: string[],
+    newCols: string[],
+    newMetrics?: string[],
+  ) => {
     setLayoutRows(newRows);
     setLayoutCols(newCols);
+    if (newMetrics) {
+      setLayoutMetrics(newMetrics);
+    }
     setIsLayoutEditorVisible(false);
 
     if (setControlValue) {
       setControlValue('groupbyRows', newRows);
       setControlValue('groupbyColumns', newCols);
+      if (newMetrics) {
+        setControlValue('metrics', newMetrics);
+      }
     }
 
     setDataMask({
       ownState: {
         groupbyRows: newRows,
         groupbyColumns: newCols,
+        ...(newMetrics ? { metrics: newMetrics } : {}),
         forceRefresh: Date.now(),
       },
       extraFormData: {
@@ -1316,6 +1345,9 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
             width: '100%',
             paddingTop: '10px',
             position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            boxSizing: 'border-box',
           }}
         >
           <Modal
@@ -1642,9 +1674,10 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
             initialRows={layoutRows}
             initialCols={layoutCols}
             allColumns={layoutAvailableColumns}
-            initialMetrics={metricNames}
+            initialMetrics={effectiveMetricNames}
             allMetrics={allAvailableMetrics}
             onSaveMetrics={(newMetrics: string[]) => {
+              setLayoutMetrics(newMetrics);
               if (setControlValue) {
                 setControlValue('metrics', newMetrics);
               }

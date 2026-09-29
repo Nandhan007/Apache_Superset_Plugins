@@ -668,6 +668,24 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
       ? props.columns?.map(c => c.key) || []
       : props.groupbyRows?.map(c => c.label || c) || [],
   );
+  const [layoutMetrics, setLayoutMetrics] = useState<string[] | null>(null);
+
+  const metricNames = useMemo(
+    () =>
+      (metrics || []).map((m: any) =>
+        typeof m === 'string' ? m : m.label || m.metric_name || String(m),
+      ),
+    [metrics],
+  );
+
+  const effectiveMetricNames = useMemo(
+    () => (layoutMetrics !== null ? layoutMetrics : metricNames),
+    [layoutMetrics, metricNames],
+  );
+
+  useEffect(() => {
+    setLayoutMetrics(null);
+  }, [metrics]);
 
   const [fetchedColumns, setFetchedColumns] = useState<DatasourceColumn[]>([]);
   const [fetchedMetrics, setFetchedMetrics] = useState<DatasourceMetric[]>([]);
@@ -711,16 +729,16 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
     return list;
   }, [fetchedMetrics, metrics, rawFormData?.metrics]);
 
-  // Fix: Patch column labels using fetched metrics logic
+  // Fix: Patch column labels using fetched metrics logic and maintain metric order
   const columnsMeta = useMemo(() => {
-    if (!fetchedMetrics || fetchedMetrics.length === 0) return rawColumnsMeta;
-
     const metricMap = new Map<string, string>();
-    fetchedMetrics.forEach(m =>
-      metricMap.set(m.metric_name, m.verbose_name || m.metric_name),
-    );
+    if (fetchedMetrics && fetchedMetrics.length > 0) {
+      fetchedMetrics.forEach(m =>
+        metricMap.set(m.metric_name, m.verbose_name || m.metric_name),
+      );
+    }
 
-    return rawColumnsMeta.map(col => {
+    const patchedCols = rawColumnsMeta.map(col => {
       if (col.isMetric || col.isPercentMetric) {
         let lookupKey = col.key;
         if (col.isPercentMetric && col.key.startsWith('%')) {
@@ -740,7 +758,47 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
       }
       return col;
     });
-  }, [rawColumnsMeta, fetchedMetrics]);
+
+    if (
+      !props.isRawRecords &&
+      effectiveMetricNames &&
+      effectiveMetricNames.length > 0
+    ) {
+      const nonMetricCols = patchedCols.filter(
+        col => !col.isMetric && !col.isPercentMetric,
+      );
+      const metricCols = patchedCols.filter(
+        col => col.isMetric || col.isPercentMetric,
+      );
+
+      metricCols.sort((a, b) => {
+        const aKey =
+          a.isPercentMetric && a.key.startsWith('%')
+            ? a.key.substring(1)
+            : a.key;
+        const bKey =
+          b.isPercentMetric && b.key.startsWith('%')
+            ? b.key.substring(1)
+            : b.key;
+        let aIdx = effectiveMetricNames.indexOf(aKey);
+        if (aIdx === -1) aIdx = effectiveMetricNames.indexOf(a.label);
+        let bIdx = effectiveMetricNames.indexOf(bKey);
+        if (bIdx === -1) bIdx = effectiveMetricNames.indexOf(b.label);
+        if (aIdx === -1) aIdx = 9999;
+        if (bIdx === -1) bIdx = 9999;
+        return aIdx - bIdx;
+      });
+
+      return [...nonMetricCols, ...metricCols];
+    }
+
+    return patchedCols;
+  }, [
+    rawColumnsMeta,
+    fetchedMetrics,
+    props.isRawRecords,
+    effectiveMetricNames,
+  ]);
 
   const dimensionKeys = useMemo(() => {
     return new Set(
@@ -1435,6 +1493,7 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
     }
 
     if (newMetrics) {
+      setLayoutMetrics(newMetrics);
       newDataMask.ownState.metrics = newMetrics;
       if (props.setControlValue) {
         props.setControlValue('metrics', newMetrics);
@@ -3038,7 +3097,7 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
             initialRows={layoutItems}
             initialCols={[]}
             allColumns={layoutAvailableColumns}
-            initialMetrics={(props.metrics as string[]) || []}
+            initialMetrics={effectiveMetricNames}
             allMetrics={allAvailableMetrics}
             mountNode={undefined}
           />

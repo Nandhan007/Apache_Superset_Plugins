@@ -3093,7 +3093,18 @@ export const TableRenderer = React.memo(props => {
 
   return (
     <Styles isDashboardEditMode={isDashboardEditMode()}>
-      <div css={modifiedCellsStyle}>
+      <div
+        css={modifiedCellsStyle}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          width: '100%',
+          minHeight: 0,
+          minWidth: 0,
+          overflow: 'hidden',
+        }}
+      >
         {activeTooltip &&
           typeof document !== 'undefined' &&
           createPortal(
@@ -3128,29 +3139,20 @@ export const TableRenderer = React.memo(props => {
             </div>,
             document.body,
           )}
-        <table className="pvtTable" role="grid">
-          <thead>
-            {colAttrs.map((c, j) => renderColHeaderRow(c, j, pivotSettings))}
-            {rowAttrs.length !== 0 && renderRowHeaderRow(pivotSettings)}
-          </thead>
-          <tbody>
-            {pagedRowKeys.map((r, i) => renderTableRow(r, i, pivotSettings))}
-            {colTotals && renderTotalsRow(pivotSettings)}
-          </tbody>
-        </table>
+        <div className="pvtTableContainer">
+          <table className="pvtTable" role="grid">
+            <thead>
+              {colAttrs.map((c, j) => renderColHeaderRow(c, j, pivotSettings))}
+              {rowAttrs.length !== 0 && renderRowHeaderRow(pivotSettings)}
+            </thead>
+            <tbody>
+              {pagedRowKeys.map((r, i) => renderTableRow(r, i, pivotSettings))}
+              {colTotals && renderTotalsRow(pivotSettings)}
+            </tbody>
+          </table>
+        </div>
         {totalRows > 25 && (
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '10px 12px',
-              borderTop: '1px solid #e8e8e8',
-              background: theme.colorBgContainer || '#fff',
-              flexWrap: 'wrap',
-              gap: '8px',
-            }}
-          >
+          <div className="pvtPaginationContainer">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '12px', color: '#666' }}>
                 {t('Showing %(start)s to %(end)s of %(total)s entries', {

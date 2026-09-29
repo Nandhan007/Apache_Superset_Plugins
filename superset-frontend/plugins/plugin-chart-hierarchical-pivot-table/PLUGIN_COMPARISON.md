@@ -12,6 +12,7 @@ This document maintains feature capabilities across custom Superset table visual
 | **Backend Sync** | Sends modified cell payload to configured API endpoint | Sends modified cell payload to configured API endpoint |
 | **Dark Mode Indicator** | Modified & editable metric highlights | Modified & editable metric highlights |
 | **Pagination & High-Density Performance** | Supported via `react-table` pagination (server/client pagination) | **Supported**: Client-side pagination (`25, 50, 100, 200, 500, All`), paginated `rowAttrSpans` recalculation, top header toolbar with Layout and action controls, delegated floating tooltips to eliminate 50k+ `<Tooltip>` instances, O(1) record indexing, and O(N) linear unpivoting to prevent browser freezes and Out-of-Memory crashes. |
+| **Metrics Order Maintenance & DnD** | **Supported**: Configured chart metrics order (`initialMetrics`) is strictly preserved at the top of the list, followed by remaining unselected datasource metrics. Drag-and-drop reordering with drag handle (`MenuOutlined`) in Data tab directly updates chart metrics config and column order on Apply. | **Supported**: Configured chart metrics order (`initialMetrics`) is strictly preserved at the top of the list, followed by remaining unselected datasource metrics. Drag-and-drop reordering with drag handle (`MenuOutlined`) in Data tab directly updates chart metrics config, pivot sorters, and unpivoting order on Apply. |
 
 ## Percentage Metrics Editing & Display Behavior Details
 
@@ -53,3 +54,24 @@ This document maintains feature capabilities across custom Superset table visual
 4. **Algorithmic Optimizations**:
    - **O(N) Unpivoting**: Replaced $O(N^2)$ array spreading in `unpivotedData` with a single-pass loop.
    - **O(1) Record Indexing**: Pre-indexes `filteredData` into a `Map` keyed by row dimensions, replacing $O(N \times M)$ linear searches on every row render.
+5. **Horizontal Scroll Independence & Docked Pagination Alignment**:
+   - Isolated the table scroll container (`.pvtTableContainer` with `overflow: auto`) from the bottom pagination bar (`.pvtPaginationContainer`).
+   - When the table has many columns and scrolls horizontally, the pagination bar remains fixed across the visible container width (`width: 100%`) rather than scrolling with the table content.
+   - The entry summary (`Showing X to Y of Z entries`) stays pinned to the bottom-left, while the pagination controls, page size selector, and action buttons remain docked at the bottom-right ("at the last") at all times.
+
+## Metrics Order Maintenance & Drag-and-Drop Reordering Details
+
+1. **Configured Metrics Order Preservation**:
+   - Previously, opening the Layout Editor Data tab iterated through datasource metrics first (`allMetrics`), inadvertently re-ordering the chart's configured metrics into datasource order.
+   - Both editors now iterate through configured `initialMetrics` first to preserve the user's configured metric sequence at the top of the list, followed by remaining unselected metrics from `allMetrics`.
+2. **Interactive Drag-and-Drop in Data Tab**:
+   - Added drag-and-drop card reordering (`MetricCard` with `MenuOutlined` drag handles and selection checkboxes) using `react-dnd`.
+   - Reordering is tracked by unique metric name/ID (`moveMetricCard(dragId, hoverId)`), preventing index-drift errors when filtering with the search input.
+   - Metric DnD uses `ItemTypes.METRIC = 'metric'`, strictly isolated from dimension cards (`ItemTypes.CARD = 'card'`).
+3. **Bi-directional Synchronization with Chart Config & Visualization**:
+   - In both plugins, clicking Apply saves the reordered metrics through `handleSaveLayout`.
+   - Propagates changes to Superset form data and dashboard state via `setControlValue('metrics', newMetrics)` and `newDataMask.ownState.metrics`.
+   - **Hierarchical Pivot Table**: Maintains `layoutMetrics` state, reorders unpivoted metric records in `unpivotedData`, and configures `sorters[METRIC_KEY] = sortAs(effectiveMetricNames)` so pivot columns render strictly in the configured order.
+   - **Editable Table**: Maintains `layoutMetrics` state and sorts `columnsMeta` metric columns immediately according to `effectiveMetricNames` so table columns immediately match the user's custom metric order.
+
+
