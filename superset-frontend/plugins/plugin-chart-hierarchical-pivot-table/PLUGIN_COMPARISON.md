@@ -13,6 +13,8 @@ This document maintains feature capabilities across custom Superset table visual
 | **Dark Mode Indicator** | Modified & editable metric highlights | Modified & editable metric highlights |
 | **Pagination & High-Density Performance** | Supported via `react-table` pagination (server/client pagination) | **Supported**: Client-side pagination (`25, 50, 100, 200, 500, All`), paginated `rowAttrSpans` recalculation, top header toolbar with Layout and action controls, delegated floating tooltips to eliminate 50k+ `<Tooltip>` instances, O(1) record indexing, and O(N) linear unpivoting to prevent browser freezes and Out-of-Memory crashes. |
 | **Metrics Order Maintenance & DnD** | **Supported**: Configured chart metrics order (`initialMetrics`) is strictly preserved at the top of the list, followed by remaining unselected datasource metrics. Drag-and-drop reordering with drag handle (`MenuOutlined`) in Data tab directly updates chart metrics config and column order on Apply. | **Supported**: Configured chart metrics order (`initialMetrics`) is strictly preserved at the top of the list, followed by remaining unselected datasource metrics. Drag-and-drop reordering with drag handle (`MenuOutlined`) in Data tab directly updates chart metrics config, pivot sorters, and unpivoting order on Apply. |
+| **Exact API Error Message Display** | **Supported**: Recursively extracts exact API response error message (`message`, `error`, `detail`, `errors`, validation dicts, HTML `<pre>/<p>`, or plain text) across cell edit sync and action execution, eliminating internal status codes (e.g. `500`, `400`) and generic messages (`Submission failed`). | **Supported**: Recursively extracts exact API response error message (`message`, `error`, `detail`, `errors`, validation dicts, HTML `<pre>/<p>`, or plain text) across cell edit sync and action execution, eliminating internal status codes (e.g. `500`, `400`) and generic messages (`Submission failed`). |
+| **Dropdown Multi-Select in Action Buttons** | **Supported**: Both chart-level and row-level action buttons support an "Allow Multi-Select" option for dropdown fields, enabling users to select multiple options, preview payload arrays, and validate array submissions in action modal forms. | **Supported**: Both chart-level and row-level action buttons support an "Allow Multi-Select" option for dropdown fields, enabling users to select multiple options, preview payload arrays, and validate array submissions in action modal forms. |
 
 ## Percentage Metrics Editing & Display Behavior Details
 
@@ -74,4 +76,35 @@ This document maintains feature capabilities across custom Superset table visual
    - **Hierarchical Pivot Table**: Maintains `layoutMetrics` state, reorders unpivoted metric records in `unpivotedData`, and configures `sorters[METRIC_KEY] = sortAs(effectiveMetricNames)` so pivot columns render strictly in the configured order.
    - **Editable Table**: Maintains `layoutMetrics` state and sorts `columnsMeta` metric columns immediately according to `effectiveMetricNames` so table columns immediately match the user's custom metric order.
 
+## Exact API Error Message Handling Details
 
+1. **Resolution of Generic Statements and HTTP Status Codes**:
+   - Replaced generic statements (e.g. `Submission failed`, `Error: Request failed with status code 400/500`) with exact, human-readable error descriptions returned by the backend API.
+2. **Unified Extraction Logic (`errorUtils.ts`)**:
+   - Extracts backend error messages across diverse backend frameworks (Flask, FastAPI, Django REST Framework, Express, Spring, etc.):
+     - Direct string properties: `message`, `error`, `detail`, `msg`, `description`, `error_message`.
+     - Nested validation arrays or dictionaries: e.g. `{ "price": ["Must be > 0"] }` formatted cleanly as `price: Must be > 0`.
+     - HTML error pages: automatically extracts text inside `<pre>`, `<p>`, or `<h1>`, stripping raw HTML tags.
+     - SupersetClient / Fetch rejections: reads and parses the JSON or text response body before throwing or notifying.
+3. **Components Integrated**:
+   - **Cell Modifications Sync**: `CellEditManager.ts` (editable table) and `PivotCellEditManager.js` (hierarchical pivot table).
+   - **Action Submissions**: `TableChart.tsx` and `HierarchicalPivotTable.tsx` for row-level and chart-level action endpoints.
+
+## Multi-Select Option for Dropdown Action Form Fields (Chart-Level & Row-Level)
+
+1. **Control Panel / Field Configuration UI (`AdditionalFieldsList.tsx`)**:
+   - In both plugins, when configuring additional fields for chart-level or row-level action buttons, selecting Field Type = `'dropdown'` displays an **"Allow Multi-Select"** checkbox.
+   - When checked, sets `multiple: true` and `isMulti: true` on the field configuration.
+2. **Payload Structure Preview (`ChartLevelActionsControl.tsx` and `RowLevelActionsControl.tsx`)**:
+   - Action button payload preview dynamically inspects whether a dropdown field is configured with `multiple` or `isMulti`.
+   - When multi-select is enabled, the sample preview formats the field as an array (e.g., `["sample_value"]`), clearly communicating to the dashboard creator that an array of selected options will be submitted in the action payload.
+3. **Action Modal Form & Data Submission (`SupersetDataForm.tsx`)**:
+   - **Form Rendering**: `SupersetDataForm` renders `<Select showSearch mode={isMulti ? 'multiple' : undefined} allowClear placeholder={isMulti ? t('Select option(s)') : t('Select an option')} />`.
+   - **Initial Values Sanitization**: `getSanitizedInitialValues` ensures initial form values for multi-select dropdowns are cleanly initialized as arrays (e.g. `[val]` if a single scalar was stored or passed), preventing Ant Design multi-select runtime type mismatches.
+   - **Validation Rules**: Dynamically assigns `type: 'array'` when `required: true` on any multi-select field (including multi-select hierarchy fields, multi-select dropdowns, and multiple file uploads), ensuring the Ant Design Form validator properly checks array lengths instead of falsely failing against default `string` validation.
+4. **Scrollable Custom Fields Configuration UI (`AdditionalFieldsList.tsx`)**:
+   - The custom fields list is wrapped in a dedicated scrollable container (`maxHeight: 260px`, `overflowY: auto`, `overflowX: hidden`).
+   - Keeps column headers (`Field Name`, `Type`, `Required`) and the "+ Add Custom Field" button pinned and easily accessible while allowing smooth vertical scrolling when multiple custom fields are configured in both chart-level and row-level action settings.
+5. **Action Configuration Modal Scroll & Layout (`ChartLevelActionsControl.tsx` and `RowLevelActionsControl.tsx`)**:
+   - Both chart-level and row-level action configuration modals enforce `overflowX: 'hidden'` alongside `overflowY: 'auto'` on `bodyStyle` (`maxHeight: '75vh', overflowY: 'auto', overflowX: 'hidden'`) and `style={{ overflowX: 'hidden' }}` on the root `<Form>`.
+   - Prevents Ant Design's grid negative margin gutter (`<Row gutter={16}>`) and vertical scrollbars from triggering an unwanted horizontal scrollbar at the bottom of the modal dialog.

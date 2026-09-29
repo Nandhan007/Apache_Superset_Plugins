@@ -20,6 +20,7 @@ import axios from 'axios';
 import { notification } from 'antd';
 import { DataRecord } from '@superset-ui/core';
 import { transformPayload } from './utils/payloadTransform';
+import { extractApiErrorMessage } from './utils/errorUtils';
 
 export class CellEditManager {
   modifications: Map<string, any>;
@@ -219,9 +220,13 @@ export class CellEditManager {
       return true;
     } catch (error) {
       console.error('Error sending modifications:', error);
+      const apiErrorMessage = await extractApiErrorMessage(
+        error,
+        error instanceof Error ? error.message : String(error),
+      );
       this.notification.error({
-        message: 'Error',
-        description: `Failed to send modifications: ${error instanceof Error ? error.message : String(error)}`,
+        message: 'Failed to send modifications',
+        description: apiErrorMessage,
       });
       return false;
     }

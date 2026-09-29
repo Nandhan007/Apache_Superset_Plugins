@@ -111,9 +111,17 @@ export default function AdditionalFieldsList({
         </div>
         <div style={{ width: 80 }}></div>
       </div>
-      <List
-        size="small"
-        bordered={false}
+      <div
+        style={{
+          maxHeight: '260px',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          paddingRight: '4px',
+        }}
+      >
+        <List
+          size="small"
+          bordered={false}
         dataSource={value}
         split={false}
         renderItem={(item, index) => (
@@ -298,6 +306,25 @@ export default function AdditionalFieldsList({
                   </Select>
                 </div>
               )}
+              {item.type === 'dropdown' && (
+                <div style={{ marginTop: 8, paddingLeft: 4 }}>
+                  <Checkbox
+                    checked={!!(item.multiple || item.isMulti)}
+                    onChange={e => {
+                      const checked = e.target.checked;
+                      const newValue = [...value];
+                      newValue[index] = {
+                        ...newValue[index],
+                        multiple: checked,
+                        isMulti: checked,
+                      };
+                      if (onChange) onChange(newValue);
+                    }}
+                  >
+                    {t('Allow Multi-Select')}
+                  </Checkbox>
+                </div>
+              )}
               {item.type === 'file' && (
                 <div style={{ marginTop: 8, paddingLeft: 4 }}>
                   <Checkbox
@@ -449,6 +476,7 @@ export default function AdditionalFieldsList({
           </List.Item>
         )}
       />
+      </div>
       <Button
         type="dashed"
         onClick={handleAdd}

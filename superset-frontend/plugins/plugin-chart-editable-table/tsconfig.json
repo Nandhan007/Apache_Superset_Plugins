@@ -10,7 +10,7 @@
       "@superset-ui/core/components": ["packages/superset-ui-core/src/components"]
     }
   },
-  "include": ["src/**/*", "types/**/*"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*", "types/**/*"],
   "exclude": ["lib", "test"],
   "references": [
     { "path": "../../packages/superset-core" },

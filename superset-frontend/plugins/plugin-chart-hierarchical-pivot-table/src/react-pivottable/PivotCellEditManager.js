@@ -3,6 +3,7 @@ import axios from 'axios';
 import { notification } from 'antd';
 import { flatKey } from './utilities';
 import { transformPayload } from '../utils/payloadTransform';
+import { extractApiErrorMessage } from '../utils/errorUtils';
 
 export class PivotCellEditManager {
   constructor(
@@ -267,9 +268,10 @@ export class PivotCellEditManager {
       return true;
     } catch (error) {
       console.error('Error sending modifications:', error);
+      const apiErrorMessage = await extractApiErrorMessage(error, error.message);
       this.notification.error({
-        message: 'Error',
-        description: `Failed to send modifications: ${error.message}`,
+        message: 'Failed to send modifications',
+        description: apiErrorMessage,
       });
       return false;
     }

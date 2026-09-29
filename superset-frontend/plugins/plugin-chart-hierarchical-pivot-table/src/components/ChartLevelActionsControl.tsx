@@ -109,7 +109,8 @@ export default function ChartLevelActionsControl({
       };
 
       if (Array.isArray(config.additionalFields)) {
-        const seenKeys = new Set<string>();
+        const seenFieldNames = new Set<string>();
+        const seenMappedCols = new Set<string>();
         for (const f of config.additionalFields) {
           if (!f) continue;
 
@@ -136,31 +137,31 @@ export default function ChartLevelActionsControl({
 
           for (const name of names) {
             const lower = String(name).toLowerCase().trim();
-            if (lower && seenKeys.has(lower)) {
+            if (lower && seenFieldNames.has(lower)) {
               notification.error({
                 message: t('Duplicate Field Name'),
                 description: t(
-                  `Field name or mapped column "${name}" is already used in form configuration.`,
+                  `Field name "${name}" is already used in form configuration.`,
                 ),
               });
               return;
             }
-            if (lower) seenKeys.add(lower);
+            if (lower) seenFieldNames.add(lower);
           }
 
           if (f.type !== 'hierarchy') {
             for (const col of mappedCols) {
               const lower = String(col).toLowerCase().trim();
-              if (lower && seenKeys.has(lower)) {
+              if (lower && seenMappedCols.has(lower)) {
                 notification.error({
-                  message: t('Duplicate Field Name'),
+                  message: t('Duplicate Mapped Column'),
                   description: t(
                     `Mapped column "${col}" is already used by another field in form configuration.`,
                   ),
                 });
                 return;
               }
-              if (lower) seenKeys.add(lower);
+              if (lower) seenMappedCols.add(lower);
             }
           }
         }
@@ -300,8 +301,9 @@ export default function ChartLevelActionsControl({
         onOk={handleOk}
         onCancel={() => setIsModalVisible(false)}
         width={800}
+        bodyStyle={{ maxHeight: '75vh', overflowY: 'auto', overflowX: 'hidden' }}
       >
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" style={{ overflowX: 'hidden' }}>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
@@ -481,16 +483,16 @@ export default function ChartLevelActionsControl({
                                 previewObj[key] = 100;
                                 break;
                               case 'select':
-                              case 'dropdown':
-                                if (
+                              case 'dropdown': {
+                                const isMulti = !!(field.multiple || field.isMulti);
+                                const sampleVal =
                                   Array.isArray(field.options) &&
                                   field.options.length > 0
-                                ) {
-                                  previewObj[key] = field.options[0];
-                                } else {
-                                  previewObj[key] = 'sample_option';
-                                }
+                                    ? field.options[0]
+                                    : 'sample_option';
+                                previewObj[key] = isMulti ? [sampleVal] : sampleVal;
                                 break;
+                              }
                               case 'date':
                                 previewObj[key] = '2026-01-01';
                                 break;

@@ -92,6 +92,7 @@ import { Button } from 'antd'; // Add Button
 import LayoutEditor from './LayoutEditor';
 import { CellEditManager } from './CellEditManager';
 import { transformPayload } from './utils/payloadTransform';
+import { extractApiErrorMessage } from './utils/errorUtils';
 import { Modal } from 'antd';
 import * as AntdIcons from '@ant-design/icons';
 import SupersetDataForm from './components/SupersetDataForm';
@@ -1088,7 +1089,11 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
         });
 
         if (!response.ok) {
-          throw new Error(`API Request failed with status ${response.status}`);
+          const apiErrorMsg = await extractApiErrorMessage(
+            response,
+            `API Request failed with status ${response.status}`,
+          );
+          throw new Error(apiErrorMsg);
         }
       } else {
         if (containsFile) {
@@ -1204,9 +1209,10 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
       }, 2000);
     } catch (err: any) {
       console.error('Action submission failed', err);
+      const apiErrorMsg = await extractApiErrorMessage(err, 'Submission failed');
       notificationApi.error({
-        message: 'Error',
-        description: err.message || 'Submission failed',
+        message: 'Action Failed',
+        description: apiErrorMsg,
       });
     } finally {
       setIsSaving(false);

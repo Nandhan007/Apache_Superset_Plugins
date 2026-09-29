@@ -72,6 +72,7 @@ import {
 } from './types/hierarchy';
 import Handlebars from 'handlebars';
 import { transformPayload } from './utils/payloadTransform';
+import { extractApiErrorMessage } from './utils/errorUtils';
 import { Modal } from 'antd';
 
 const Styles = styled.div<PivotTableStylesProps>`
@@ -620,7 +621,11 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
         });
 
         if (!response.ok) {
-          throw new Error(`API Request failed with status ${response.status}`);
+          const apiErrorMsg = await extractApiErrorMessage(
+            response,
+            `API Request failed with status ${response.status}`,
+          );
+          throw new Error(apiErrorMsg);
         }
       } else {
         if (containsFile) {
@@ -711,9 +716,10 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
       }, 2000);
     } catch (err: any) {
       console.error('Action submission failed', err);
+      const apiErrorMsg = await extractApiErrorMessage(err, 'Submission failed');
       notification.error({
-        message: 'Error',
-        description: err.message || 'Submission failed',
+        message: 'Action Failed',
+        description: apiErrorMsg,
       });
     } finally {
       setIsSaving(false);

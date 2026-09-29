@@ -228,8 +228,19 @@ export default function SupersetDataForm({
               values[f.name] = rowVal;
             }
           } else {
-            values[f.name] = rowVal;
+            const isMulti = !!(f.isMulti || f.multiple);
+            values[f.name] = isMulti && f.type === 'dropdown' ? [rowVal] : rowVal;
           }
+        }
+      } else if (f.type === 'dropdown' && !Array.isArray(f.name)) {
+        const isMulti = !!(f.isMulti || f.multiple);
+        const curr = values[f.name];
+        if (isMulti) {
+          if (curr !== undefined && curr !== null && !Array.isArray(curr)) {
+            values[f.name] = curr !== '' ? [curr] : [];
+          }
+        } else if (Array.isArray(curr)) {
+          values[f.name] = curr.length > 0 ? curr[0] : undefined;
         }
       }
     });
@@ -815,17 +826,21 @@ export default function SupersetDataForm({
                 label: opt,
               }));
 
+          const isMulti = !!(
+            additionalConfig.multiple || additionalConfig.isMulti
+          );
+
           inputNode = (
             <Select
               showSearch
-              mode={additionalConfig.multiple ? 'multiple' : undefined}
+              mode={isMulti ? 'multiple' : undefined}
               allowClear
               loading={
                 additionalConfig.mappedColumn
                   ? formState.loading[fieldName]
                   : undefined
               }
-              placeholder="Select an option"
+              placeholder={isMulti ? t('Select option(s)') : t('Select an option')}
             >
               {selectOptions.map(opt => (
                 <Select.Option key={opt.value} value={opt.value}>
@@ -939,8 +954,18 @@ export default function SupersetDataForm({
     const isRequired =
       additionalConfig ? !!additionalConfig.required : false;
 
+    const isArrayType =
+      (isHierarchy && isMulti) ||
+      (additionalConfig?.type === 'dropdown' &&
+        !!(additionalConfig.multiple || additionalConfig.isMulti)) ||
+      (additionalConfig?.type === 'file' && !!additionalConfig.multiple);
+
     const rules: any[] = [
-      { required: isRequired, message: `Please input ${fieldName}` },
+      {
+        required: isRequired,
+        message: `Please input ${fieldName}`,
+        type: isArrayType ? 'array' : undefined,
+      },
     ];
     if (additionalConfig?.type === 'file') {
       rules.push({
