@@ -2130,15 +2130,9 @@ export const TableRenderer = React.memo(props => {
 
         const isEditableMetric = checkIsEditableMetric(metricForEditCheck);
 
-        const isSubtotalOrGrandTotal = (() => {
-          if (rowAttrs.length === 0 && colKey.length === colAttrs.length) {
-            return false;
-          }
-          if (colAttrs.length === 0 && rowKey.length === rowAttrs.length) {
-            return false;
-          }
-          return agg.isSubtotal || agg.isGrandTotal;
-        })();
+        // Subtotal cells are now editable if the metric is editable.
+        // Only grand total cells remain non-editable in the grid.
+        const isCellEditable = isEditableMetric && !agg.isGrandTotal;
 
         const keys = [...rowKey, ...colKey];
         let backgroundColor;
@@ -2169,7 +2163,7 @@ export const TableRenderer = React.memo(props => {
 
         const cellStyle = {
           ...(agg.isSubtotal ? { fontWeight: 'bold' } : { backgroundColor }),
-          ...(isEditableMetric && !isSubtotalOrGrandTotal
+          ...(isCellEditable
             ? {
                 backgroundColor: isDarkMode ? '#2d2d14' : '#FFFBE6', // Dark olive for dark mode
                 position: 'relative',
@@ -2193,14 +2187,14 @@ export const TableRenderer = React.memo(props => {
             className={cellClassName}
             key={`pvtVal-${flatColKey}`}
             onClick={
-              isEditableMetric && !isSubtotalOrGrandTotal
+              isCellEditable
                 ? handleCellClick(rowKey, colKey, originalValue)
                 : rowClickHandlers[flatColKey]
             }
             onContextMenu={e => onContextMenu(e, colKey, rowKey)}
             style={cellStyle}
           >
-            {isEditing && isEditableMetric && !isSubtotalOrGrandTotal ? (
+            {isEditing && isCellEditable ? (
               <EditableCell
                 value={displayValue}
                 isPercentage={checkIsPercentageMetric(metricForEditCheck)}
@@ -2277,12 +2271,10 @@ export const TableRenderer = React.memo(props => {
 
         const isEditableMetric = checkIsEditableMetric(metricForTotalEditCheck);
 
-        // When colAttrs.length === 0 (no column groupby dimensions), totalCell with full rowKey represents the editable leaf data cell for that row.
+        // When colAttrs.length === 0 (no column groupby dimensions), totalCell with full or subtotal rowKey represents the editable data/subtotal cell for that row.
         const isTotalEditableMetric =
           isEditableMetric &&
           colAttrs.length === 0 &&
-          rowKey.length === rowAttrs.length &&
-          !agg.isSubtotal &&
           !agg.isGrandTotal;
 
         const isDarkMode = theme.colorBgBase
@@ -2292,6 +2284,7 @@ export const TableRenderer = React.memo(props => {
         const cellStyle = {
           padding: `${theme.sizeUnit}px`,
           position: 'relative',
+          ...(agg.isSubtotal ? { fontWeight: 'bold' } : {}),
           ...(isTotalEditableMetric
             ? {
                 backgroundColor: isDarkMode ? '#2d2d14' : '#FFFBE6',

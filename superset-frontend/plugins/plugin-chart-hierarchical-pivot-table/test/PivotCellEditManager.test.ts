@@ -102,4 +102,34 @@ describe('PivotCellEditManager', () => {
       description: 'Quantity cannot exceed 500',
     });
   });
+
+  it('should record modifications for subtotal row edits with appropriate higher-level dimensions', () => {
+    const manager = new PivotCellEditManager(
+      ['Category', 'Subcategory'],
+      ['Region'],
+      [],
+      'Sum',
+      ['Sales'],
+      'https://api.example.com/save',
+      ['Sales'],
+      'datasource1',
+    );
+    // Edit a subtotal cell at the Category level
+    manager.setValue(['Furniture'], ['East'], 500, 750);
+    expect(manager.isModified(['Furniture'], ['East'])).toBe(true);
+    expect(manager.getValue(['Furniture'], ['East'], 500)).toBe(750);
+
+    const modifications = manager.getModifications();
+    expect(modifications.data).toEqual([
+      {
+        dimensions: {
+          Category: 'Furniture',
+          Region: 'East',
+        },
+        measures: {
+          Sales: 750,
+        },
+      },
+    ]);
+  });
 });

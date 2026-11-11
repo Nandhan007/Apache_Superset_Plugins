@@ -177,6 +177,139 @@ export const formatPercentageValue = (val: any): string => {
   return `${scaled.toFixed(2)}%`;
 };
 
+export const resolveMetricAggregation = (
+  metricName: string,
+  metrics: (string | AdhocMetric)[] = [],
+  rawMetrics: any[] = [],
+  datasourceMetrics: DatasourceMetric[] = [],
+  columnConfig: Record<string, any> = {},
+  defaultAgg = 'Sum',
+): string => {
+  if (!metricName) return defaultAgg;
+
+  const mapAggregateToName = (agg: string | undefined): string | null => {
+    if (!agg) return null;
+    const upper = String(agg).toUpperCase().trim();
+    switch (upper) {
+      case 'AVG':
+      case 'AVERAGE':
+      case 'MEAN':
+        return 'Average';
+      case 'SUM':
+        return 'Sum';
+      case 'COUNT':
+        return 'Count';
+      case 'COUNT_DISTINCT':
+        return 'Count Unique Values';
+      case 'MIN':
+      case 'MINIMUM':
+        return 'Minimum';
+      case 'MAX':
+      case 'MAXIMUM':
+        return 'Maximum';
+      case 'MEDIAN':
+        return 'Median';
+      case 'VAR':
+      case 'VARIANCE':
+        return 'Sample Variance';
+      case 'STD':
+      case 'STDEV':
+      case 'STDDEV':
+        return 'Sample Standard Deviation';
+      case 'FIRST':
+        return 'First';
+      case 'LAST':
+        return 'Last';
+      default:
+        return null;
+    }
+  };
+
+  const extractFromSql = (sql: string | undefined): string | null => {
+    if (!sql) return null;
+    const cleanSql = String(sql).trim();
+    if (/\bcount\s*\(\s*distinct\b/i.test(cleanSql)) return 'Count Unique Values';
+    if (/\b(avg|average|mean)\s*\(/i.test(cleanSql)) return 'Average';
+    if (/\bcount\s*\(/i.test(cleanSql)) return 'Count';
+    if (/\bmin\s*\(/i.test(cleanSql)) return 'Minimum';
+    if (/\bmax\s*\(/i.test(cleanSql)) return 'Maximum';
+    if (/\bmedian\s*\(/i.test(cleanSql)) return 'Median';
+    if (/\b(std|stdev|stddev)\s*\(/i.test(cleanSql)) return 'Sample Standard Deviation';
+    if (/\b(var|variance)\s*\(/i.test(cleanSql)) return 'Sample Variance';
+    if (/\bsum\s*\(/i.test(cleanSql)) return 'Sum';
+    return null;
+  };
+
+  // 1. Check columnConfig
+  const colConf = columnConfig?.[metricName];
+  if (colConf) {
+    const fromColConf = mapAggregateToName(colConf.aggregate || colConf.aggregateFunction);
+    if (fromColConf) return fromColConf;
+  }
+
+  // 2. Check metrics from formData / props
+  const allMetricObjs = [...rawMetrics, ...metrics];
+  for (const m of allMetricObjs) {
+    if (!m) continue;
+    if (typeof m === 'object') {
+      const label = m.label || m.metric_name || m.optionName;
+      const colName = m.column?.column_name;
+      const matches =
+        label === metricName ||
+        colName === metricName ||
+        String(label).toLowerCase().trim() === String(metricName).toLowerCase().trim() ||
+        String(colName).toLowerCase().trim() === String(metricName).toLowerCase().trim();
+
+      if (matches) {
+        if (m.aggregate) {
+          const matched = mapAggregateToName(m.aggregate);
+          if (matched) return matched;
+        }
+        if (m.sqlExpression || m.expression) {
+          const matched = extractFromSql(m.sqlExpression || m.expression);
+          if (matched) return matched;
+        }
+      }
+    }
+  }
+
+  // 3. Check datasourceMetrics / fetchedMetrics
+  for (const dm of datasourceMetrics) {
+    if (!dm) continue;
+    const name = dm.metric_name || (dm as any).name;
+    const vName = dm.verbose_name || (dm as any).label;
+    const matches =
+      name === metricName ||
+      vName === metricName ||
+      String(name).toLowerCase().trim() === String(metricName).toLowerCase().trim() ||
+      String(vName).toLowerCase().trim() === String(metricName).toLowerCase().trim();
+
+    if (matches) {
+      if ((dm as any).aggregate) {
+        const matched = mapAggregateToName((dm as any).aggregate);
+        if (matched) return matched;
+      }
+      if (dm.expression) {
+        const matched = extractFromSql(dm.expression);
+        if (matched) return matched;
+      }
+    }
+  }
+
+  // 4. Name heuristics for metric name / label
+  const lower = metricName.toLowerCase().trim();
+  if (/(^|_|\b)(avg|average|mean)($|_|\b)/i.test(lower)) return 'Average';
+  if (/(^|_|\b)(min|minimum)($|_|\b)/i.test(lower)) return 'Minimum';
+  if (/(^|_|\b)(max|maximum)($|_|\b)/i.test(lower)) return 'Maximum';
+  if (/(^|_|\b)(count|distinct_count)($|_|\b)/i.test(lower)) return 'Count';
+  if (/(^|_|\b)(median)($|_|\b)/i.test(lower)) return 'Median';
+  if (/(^|_|\b)(std|stdev|stddev)($|_|\b)/i.test(lower)) return 'Sample Standard Deviation';
+  if (/(^|_|\b)(var|variance)($|_|\b)/i.test(lower)) return 'Sample Variance';
+  if (/(^|_|\b)(sum|total)($|_|\b)/i.test(lower)) return 'Sum';
+
+  return defaultAgg;
+};
+
 export default function HierarchicalPivotTable(props: PivotTableProps) {
   const {
     data,
@@ -230,6 +363,7 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
     enableLayout,
     htmlViewerActions = [],
     validationError,
+    columnScopedAggregation = false,
   } = props;
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -834,6 +968,39 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
     () => (layoutMetrics.length > 0 ? layoutMetrics : metricNames),
     [layoutMetrics, metricNames],
   );
+
+  const metricAggregations = useMemo(() => {
+    if (!columnScopedAggregation) {
+      return undefined;
+    }
+    const map: Record<string, string> = {};
+    const rawMetrics = (rawFormData as any)?.metrics || [];
+    const dsMetrics = [
+      ...fetchedMetrics,
+      ...(((props as any).datasource as any)?.metrics || []),
+    ];
+    const colConfig = (rawFormData as any)?.column_config || {};
+
+    effectiveMetricNames.forEach(name => {
+      map[name] = resolveMetricAggregation(
+        name,
+        metrics,
+        rawMetrics,
+        dsMetrics,
+        colConfig,
+        aggregateFunction || 'Sum',
+      );
+    });
+    return map;
+  }, [
+    columnScopedAggregation,
+    effectiveMetricNames,
+    metrics,
+    rawFormData,
+    fetchedMetrics,
+    props,
+    aggregateFunction,
+  ]);
 
   const enhancedVerboseMap = useMemo(() => {
     const map = { ...verboseMap };
@@ -1698,6 +1865,9 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
               defaultFormatter={defaultFormatter}
               customFormatters={metricFormatters}
               aggregatorName={aggregateFunction}
+              columnScopedAggregation={columnScopedAggregation}
+              metricAggregations={metricAggregations}
+              metricKey={METRIC_KEY}
               vals={vals}
               colOrder={colOrder}
               rowOrder={rowOrder}

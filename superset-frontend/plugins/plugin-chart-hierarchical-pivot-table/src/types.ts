@@ -130,6 +130,7 @@ interface PivotTableCustomizeProps {
   redirectionUrls?: RedirectConfig[];
   globalRedirectionUrls?: RedirectConfig[];
   enableLayout?: boolean;
+  columnScopedAggregation?: boolean;
   htmlViewerActions?: HTMLViewerActionConfig[];
   validationError?: string;
 }

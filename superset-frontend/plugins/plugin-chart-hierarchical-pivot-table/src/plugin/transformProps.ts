@@ -278,6 +278,7 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     redirectionUrls,
     globalRedirectionUrls,
     htmlViewerActions,
+    columnScopedAggregation,
   } = formData;
 
   const backendApiUrl =
@@ -564,6 +565,7 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     redirectionUrls,
     globalRedirectionUrls,
     enableLayout: formData.enableLayout !== false,
+    columnScopedAggregation: Boolean(columnScopedAggregation),
     htmlViewerActions,
     validationError:
       validationErrors.length > 0 ? validationErrors.join(' | ') : undefined,

@@ -213,6 +213,7 @@ describe('PivotTableChart transformProps', () => {
       timeGrainSqla: undefined,
       onContextMenu: undefined,
       enableLayout: true,
+      columnScopedAggregation: false,
       htmlViewerActions: undefined,
     });
   });

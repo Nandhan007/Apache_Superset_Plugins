@@ -99,21 +99,37 @@ export class PivotCellEditManager {
     const metricInRowKey = this.rows.includes('Metric');
     const metricInColKey = this.cols.includes('Metric');
 
-    if (metricInRowKey) {
+    if (metricInRowKey && rowKey[this.rows.indexOf('Metric')]) {
       const metricIndex = this.rows.indexOf('Metric');
-      const metricDisplayLabel = rowKey[metricIndex]; // Assuming next element is the metric display label
+      const metricDisplayLabel = rowKey[metricIndex];
       metricName = getOriginalMetricName(metricDisplayLabel) || metricName;
-    } else if (metricInColKey) {
+    } else if (metricInColKey && colKey[this.cols.indexOf('Metric')]) {
       const metricIndex = this.cols.indexOf('Metric');
-      const metricDisplayLabel = colKey[metricIndex]; // Assuming next element is the metric display label
+      const metricDisplayLabel = colKey[metricIndex];
       metricName = getOriginalMetricName(metricDisplayLabel) || metricName;
-    } else if (Array.isArray(this.metrics) && this.metrics.length > 0) {
-      const firstMetric = this.metrics[0];
-      const metricDisplayLabel =
-        typeof firstMetric === 'string'
-          ? firstMetric
-          : firstMetric.label || firstMetric.metric_name;
-      metricName = getOriginalMetricName(metricDisplayLabel) || metricName;
+    } else {
+      const foundInKeys = [...rowKey, ...colKey].find(k => {
+        return (
+          Array.isArray(this.metrics) &&
+          this.metrics.some(m => {
+            const l = typeof m === 'string' ? m : m.label || m.metric_name;
+            return (
+              l === k ||
+              String(l).toLowerCase().trim() === String(k).toLowerCase().trim()
+            );
+          })
+        );
+      });
+      if (foundInKeys) {
+        metricName = getOriginalMetricName(foundInKeys) || metricName;
+      } else if (Array.isArray(this.metrics) && this.metrics.length > 0) {
+        const firstMetric = this.metrics[0];
+        const metricDisplayLabel =
+          typeof firstMetric === 'string'
+            ? firstMetric
+            : firstMetric.label || firstMetric.metric_name;
+        metricName = getOriginalMetricName(metricDisplayLabel) || metricName;
+      }
     }
 
     const isNumOrig =

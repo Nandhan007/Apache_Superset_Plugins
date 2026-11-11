@@ -1020,6 +1020,20 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'columnScopedAggregation',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Column-Scoped Aggregation'),
+              renderTrigger: true,
+              default: false,
+              description: t(
+                'Apply column-specific aggregation types (e.g. Average, Sum, Min, Max, Count) for subtotals based on metric configurations instead of a single global aggregation function.',
+              ),
+            },
+          },
+        ],
+        [
+          {
             name: 'aggregateFunction',
             config: {
               type: 'SelectControl',

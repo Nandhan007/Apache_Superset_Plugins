@@ -753,23 +753,79 @@ class PivotData {
       'PivotData',
     );
 
-    this.aggregator = this.props
-      .aggregatorsFactory(this.props.defaultFormatter)
-      [this.props.aggregatorName](this.props.vals);
-    this.formattedAggregators =
-      this.props.customFormatters &&
-      Object.entries(this.props.customFormatters).reduce(
-        (acc, [key, columnFormatter]) => {
-          acc[key] = {};
+    const isColumnScoped =
+      Boolean(this.props.columnScopedAggregation) &&
+      Boolean(this.props.metricAggregations || this.props.metricAggregators);
+    const metricAggregators = isColumnScoped
+      ? this.props.metricAggregations || this.props.metricAggregators || {}
+      : {};
+    const defaultAggName = this.props.aggregatorName || 'Sum';
+
+    const getAggName = (colName, groupKey) => {
+      if (metricAggregators[colName]) return metricAggregators[colName];
+      if (
+        groupKey &&
+        metricAggregators[groupKey] &&
+        metricAggregators[groupKey][colName]
+      ) {
+        return metricAggregators[groupKey][colName];
+      }
+      return defaultAggName;
+    };
+
+    const firstMetricAgg =
+      isColumnScoped && typeof metricAggregators === 'object'
+        ? Object.values(metricAggregators).find(v => typeof v === 'string')
+        : null;
+    const baseAggName =
+      firstMetricAgg && Object.keys(metricAggregators).length === 1
+        ? firstMetricAgg
+        : defaultAggName;
+    const baseAggFactory =
+      this.props.aggregatorsFactory(this.props.defaultFormatter)[baseAggName] ||
+      this.props.aggregatorsFactory(this.props.defaultFormatter)[defaultAggName] ||
+      this.props.aggregatorsFactory(this.props.defaultFormatter).Sum;
+    this.aggregator = baseAggFactory(this.props.vals);
+
+    this.formattedAggregators = {};
+
+    if (this.props.customFormatters) {
+      Object.entries(this.props.customFormatters).forEach(
+        ([key, columnFormatter]) => {
+          this.formattedAggregators[key] = this.formattedAggregators[key] || {};
           Object.entries(columnFormatter).forEach(([column, formatter]) => {
-            acc[key][column] = this.props
-              .aggregatorsFactory(formatter)
-              [this.props.aggregatorName](this.props.vals);
+            const aggName = getAggName(column, key);
+            const factory =
+              this.props.aggregatorsFactory(formatter)[aggName] ||
+              this.props.aggregatorsFactory(formatter)[defaultAggName] ||
+              this.props.aggregatorsFactory(formatter).Sum;
+            this.formattedAggregators[key][column] = factory(this.props.vals);
           });
-          return acc;
         },
-        {},
       );
+    }
+
+    if (Object.keys(metricAggregators).length > 0) {
+      const metricKey = this.props.metricKey || 'Metric';
+      this.formattedAggregators[metricKey] =
+        this.formattedAggregators[metricKey] || {};
+      Object.entries(metricAggregators).forEach(([metricName, aggType]) => {
+        if (
+          typeof aggType === 'string' &&
+          !this.formattedAggregators[metricKey][metricName]
+        ) {
+          const formatter = this.props.defaultFormatter;
+          const factory =
+            this.props.aggregatorsFactory(formatter)[aggType] ||
+            this.props.aggregatorsFactory(formatter)[defaultAggName] ||
+            this.props.aggregatorsFactory(formatter).Sum;
+          this.formattedAggregators[metricKey][metricName] = factory(
+            this.props.vals,
+          );
+        }
+      });
+    }
+
     this.tree = {};
     this.rowKeys = [];
     this.colKeys = [];
@@ -784,7 +840,10 @@ class PivotData {
   }
 
   getFormattedAggregator(record, totalsKeys) {
-    if (!this.formattedAggregators) {
+    if (
+      !this.formattedAggregators ||
+      Object.keys(this.formattedAggregators).length === 0
+    ) {
       return this.aggregator;
     }
     const [groupName, groupValue] =
@@ -796,7 +855,11 @@ class PivotData {
     if (
       !groupName ||
       !groupValue ||
-      (totalsKeys && !totalsKeys.includes(groupValue))
+      (totalsKeys &&
+        totalsKeys.length > 0 &&
+        !totalsKeys.includes(groupValue) &&
+        (this.props.rows?.includes(groupName) ||
+          this.props.cols?.includes(groupName)))
     ) {
       return this.aggregator;
     }

@@ -15,6 +15,7 @@ This document maintains feature capabilities across custom Superset table visual
 | **Metrics Order Maintenance & DnD** | **Supported**: Configured chart metrics order (`initialMetrics`) is strictly preserved at the top of the list, followed by remaining unselected datasource metrics. Drag-and-drop reordering with drag handle (`MenuOutlined`) in Data tab directly updates chart metrics config and column order on Apply. | **Supported**: Configured chart metrics order (`initialMetrics`) is strictly preserved at the top of the list, followed by remaining unselected datasource metrics. Drag-and-drop reordering with drag handle (`MenuOutlined`) in Data tab directly updates chart metrics config, pivot sorters, and unpivoting order on Apply. |
 | **Exact API Error Message Display** | **Supported**: Recursively extracts exact API response error message (`message`, `error`, `detail`, `errors`, validation dicts, HTML `<pre>/<p>`, or plain text) across cell edit sync and action execution, eliminating internal status codes (e.g. `500`, `400`) and generic messages (`Submission failed`). | **Supported**: Recursively extracts exact API response error message (`message`, `error`, `detail`, `errors`, validation dicts, HTML `<pre>/<p>`, or plain text) across cell edit sync and action execution, eliminating internal status codes (e.g. `500`, `400`) and generic messages (`Submission failed`). |
 | **Dropdown Multi-Select in Action Buttons** | **Supported**: Both chart-level and row-level action buttons support an "Allow Multi-Select" option for dropdown fields, enabling users to select multiple options, preview payload arrays, and validate array submissions in action modal forms. | **Supported**: Both chart-level and row-level action buttons support an "Allow Multi-Select" option for dropdown fields, enabling users to select multiple options, preview payload arrays, and validate array submissions in action modal forms. |
+| **Subtotal Cell Editing & Exact Column Aggregations** | N/A (Flat Table) | **Supported**: Subtotal cells (`agg.isSubtotal`) are fully editable for configured `editableMetrics`, recording higher-level dimension payloads for backend disaggregation. When the **Column-Scoped Aggregation** flag in the Options section is enabled, subtotal calculations dynamically apply the exact aggregation type of each particular column/metric (Average, Sum, Count, Min, Max, Median, etc.); otherwise, the default fallback (`aggregateFunction`) is used. |
 
 ## Percentage Metrics Editing & Display Behavior Details
 
@@ -108,4 +109,20 @@ This document maintains feature capabilities across custom Superset table visual
 5. **Action Configuration Modal Scroll & Layout (`ChartLevelActionsControl.tsx` and `RowLevelActionsControl.tsx`)**:
    - Both chart-level and row-level action configuration modals enforce `overflowX: 'hidden'` alongside `overflowY: 'auto'` on `bodyStyle` (`maxHeight: '75vh', overflowY: 'auto', overflowX: 'hidden'`) and `style={{ overflowX: 'hidden' }}` on the root `<Form>`.
    - Prevents Ant Design's grid negative margin gutter (`<Row gutter={16}>`) and vertical scrollbars from triggering an unwanted horizontal scrollbar at the bottom of the modal dialog.
+
+## Subtotal Cell Editing & Column-Specific Exact Aggregations (Hierarchical Pivot Table)
+
+1. **Subtotal Cells Editable**:
+   - Subtotal cells (`agg.isSubtotal === true`) across rows and columns are fully editable for columns configured in `editableMetrics`.
+   - Clicking an editable subtotal cell activates `<EditableCell>`, allowing inline numeric edits, float support, and percentage scaling.
+   - Upon save, `PivotCellEditManager` records the modified subtotal value along with its exact higher-level row/column dimensions (e.g. `{ Category: 'Furniture', Region: 'East' }` for a category-level subtotal row), enabling backend disaggregation services to disaggregate adjustments across underlying records.
+2. **Column-Specific Exact Aggregations for Subtotals (Toggled via "Column-Scoped Aggregation")**:
+   - Controlled via the **"Column-Scoped Aggregation"** checkbox in the Options section of the control panel (placed directly above the Aggregation function dropdown). Default: `false` (unchecked).
+   - **When Disabled (Default Fallback)**: Falls back to the global `aggregateFunction` (e.g. Sum or user selection) across all subtotal calculations.
+   - **When Enabled**: Resolves the exact aggregation type for each metric column:
+     - Adhoc Metrics: Inspects `aggregate` (e.g. `AVG`, `COUNT`, `MIN`, `MAX`, `SUM`, `MEDIAN`, `VAR`, `STDDEV`) or SQL expression (e.g. `AVG(...)`, `COUNT(DISTINCT ...)`, `MAX(...)`).
+     - Dataset Metrics: Inspects dataset metric `expression` and metadata from `/api/v1/dataset/${id}`.
+     - Column Configurations & Name Patterns: Inspects `column_config` and standard metric naming heuristics (`avg_`, `min_`, `max_`, `count_`, `median_`).
+   - Propagates `metricAggregations` to `PivotData` and `react-pivottable`, creating dedicated aggregators for each column.
+   - Subtotal cells dynamically compute the exact aggregation type corresponding to their metric (e.g. `Average` averages values, `Maximum` calculates max, `Minimum` calculates min, `Count` counts records) instead of summing all metrics.
 
