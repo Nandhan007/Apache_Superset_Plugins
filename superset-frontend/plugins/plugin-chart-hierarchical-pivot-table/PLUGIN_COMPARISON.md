@@ -16,6 +16,7 @@ This document maintains feature capabilities across custom Superset table visual
 | **Exact API Error Message Display** | **Supported**: Recursively extracts exact API response error message (`message`, `error`, `detail`, `errors`, validation dicts, HTML `<pre>/<p>`, or plain text) across cell edit sync and action execution, eliminating internal status codes (e.g. `500`, `400`) and generic messages (`Submission failed`). | **Supported**: Recursively extracts exact API response error message (`message`, `error`, `detail`, `errors`, validation dicts, HTML `<pre>/<p>`, or plain text) across cell edit sync and action execution, eliminating internal status codes (e.g. `500`, `400`) and generic messages (`Submission failed`). |
 | **Dropdown Multi-Select in Action Buttons** | **Supported**: Both chart-level and row-level action buttons support an "Allow Multi-Select" option for dropdown fields, enabling users to select multiple options, preview payload arrays, and validate array submissions in action modal forms. | **Supported**: Both chart-level and row-level action buttons support an "Allow Multi-Select" option for dropdown fields, enabling users to select multiple options, preview payload arrays, and validate array submissions in action modal forms. |
 | **Subtotal Cell Editing & Exact Column Aggregations** | N/A (Flat Table) | **Supported**: Subtotal cells (`agg.isSubtotal`) are fully editable for configured `editableMetrics`, recording higher-level dimension payloads for backend disaggregation. When the **Column-Scoped Aggregation** flag in the Options section is enabled, subtotal calculations dynamically apply the exact aggregation type of each particular column/metric (Average, Sum, Count, Min, Max, Median, etc.); otherwise, the default fallback (`aggregateFunction`) is used. |
+| **Drill By & Modal Context Loading State** | **Normalized**: `isRefreshing` normalized to strict boolean `false` when omitted or undefined, preventing Ant Design's `<Spin spinning={...}>` from defaulting `undefined` to `true` inside Drill By modal views. | **Normalized**: `isRefreshing` normalized to strict boolean `false` when omitted or undefined, preventing Ant Design's `<Spin spinning={...}>` from defaulting `undefined` to `true` inside Drill By modal views. |
 
 ## Percentage Metrics Editing & Display Behavior Details
 
@@ -125,3 +126,15 @@ This document maintains feature capabilities across custom Superset table visual
      - Column Configurations & Name Patterns: Inspects `column_config` and standard metric naming heuristics (`avg_`, `min_`, `max_`, `count_`, `median_`).
    - Propagates `metricAggregations` to `PivotData` and `react-pivottable`, creating dedicated aggregators for each column.
    - Subtotal cells dynamically compute the exact aggregation type corresponding to their metric (e.g. `Average` averages values, `Maximum` calculates max, `Minimum` calculates min, `Count` counts records) instead of summing all metrics.
+
+## Drill By & Modal Context Loading State Handling
+
+1. **Root Cause**:
+   - In Ant Design's `<Spin>` component, the default prop value is `spinning = true`. When `spinning` receives `undefined`, Ant Design falls back to `true`.
+   - In dashboard view, `ChartRenderer` passes `isRefreshing={Boolean(suppressLoadingSpinner) && chartStatus === 'loading'}` which is always a boolean (`false` or `true`).
+   - When opened in the Drill By modal (`DrillByChart.tsx`), charts are rendered through `<SuperChart>` without passing `isRefreshing`. Consequently, `(chartProps as any).isRefreshing` resolves to `undefined`.
+   - In the chart component, `isSaving || isRefreshing` evaluated to `false || undefined` -> `undefined`. Ant Design `<Spin>` received `spinning={undefined}` and defaulted to `true`, displaying a perpetual loading spinner with `Loading...` centered over the already-rendered table.
+2. **Resolution**:
+   - `transformProps.ts` normalizes `isRefreshing` to a strict boolean: `const isRefreshing = Boolean((chartProps as any).isRefreshing)`.
+   - Chart components wrap the `Spin` condition in `Boolean(isSaving || isRefreshing)`, ensuring `<Spin spinning={false}>` is passed when no refresh or save is occurring.
+   - Action and Layout buttons similarly enforce `loading={Boolean(isSaving || isRefreshing)}` and `disabled={Boolean(isRefreshing)}`.

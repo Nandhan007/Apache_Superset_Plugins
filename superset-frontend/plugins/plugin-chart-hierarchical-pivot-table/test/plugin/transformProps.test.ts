@@ -168,7 +168,7 @@ describe('PivotTableChart transformProps', () => {
         },
       ],
       useCustomSorting: undefined,
-      isRefreshing: undefined,
+      isRefreshing: false,
       excludeOptionFilter: undefined,
       backendApiUrl: undefined,
       editableMetrics: undefined,

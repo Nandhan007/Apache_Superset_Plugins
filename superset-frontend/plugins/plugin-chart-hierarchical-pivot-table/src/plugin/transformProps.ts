@@ -242,7 +242,7 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     emitCrossFilters,
   } = chartProps;
   // User noted isRefreshing is available in chartProps
-  const isRefreshing = (chartProps as any).isRefreshing;
+  const isRefreshing = Boolean((chartProps as any).isRefreshing);
 
   const { data, colnames, coltypes } = queriesData[0];
   const ownState = (chartProps as any).ownState || (chartProps as any).rawFormData?.ownState || {};

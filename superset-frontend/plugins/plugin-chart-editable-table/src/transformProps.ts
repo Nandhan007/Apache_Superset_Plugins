@@ -677,7 +677,7 @@ const transformProps = (
     emitCrossFilters,
   } = chartProps;
 
-  const isRefreshing = (chartProps as any).isRefreshing;
+  const isRefreshing = Boolean((chartProps as any).isRefreshing);
 
   const formData = merge(
     {},

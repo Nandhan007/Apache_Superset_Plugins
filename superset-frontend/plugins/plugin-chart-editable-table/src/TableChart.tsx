@@ -2807,7 +2807,7 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
             size="small"
             className="editable-table-save-btn"
             type="primary"
-            loading={isSaving || isRefreshing}
+            loading={Boolean(isSaving || isRefreshing)}
             onClick={async () => {
               setIsSaving(true);
               try {
@@ -2973,7 +2973,7 @@ export default function TableEditableChart<D extends DataRecord = DataRecord>(
   return (
     <Styles>
       <Spin
-        spinning={isSaving || isRefreshing}
+        spinning={Boolean(isSaving || isRefreshing)}
         tip={isSaving ? t('Saving...') : t('Loading...')}
         style={{ height: '100%', width: '100%' }}
       >

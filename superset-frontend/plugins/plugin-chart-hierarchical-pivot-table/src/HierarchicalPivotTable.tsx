@@ -1507,7 +1507,7 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
   return (
     <Styles height={height} width={width} margin={theme.sizeUnit * 4}>
       <Spin
-        spinning={isSaving || isRefreshing}
+        spinning={Boolean(isSaving || isRefreshing)}
         tip={isSaving ? t('Saving changes...') : t('Loading...')}
         style={{ height: '100%', width: '100%' }}
       >
@@ -1711,7 +1711,7 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
               <Button
                 size="small"
                 className="editable-pivot-table-save-btn"
-                loading={isSaving || isRefreshing}
+                loading={Boolean(isSaving || isRefreshing)}
                 onClick={async () => {
                   if (saveDataRef.current) {
                     setIsSaving(true);
@@ -1834,7 +1834,7 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
                 onClick={() => setIsLayoutEditorVisible(true)}
                 className="editable-pivot-table-layout-btn pivot-editable-table-layout-button"
                 icon={<TableOutlined />}
-                disabled={isRefreshing}
+                disabled={Boolean(isRefreshing)}
               >
                 Layout
               </Button>
