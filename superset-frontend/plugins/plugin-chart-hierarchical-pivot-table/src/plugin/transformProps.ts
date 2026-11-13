@@ -566,6 +566,10 @@ export default function transformProps(chartProps: ChartProps<QueryFormData>) {
     globalRedirectionUrls,
     enableLayout: formData.enableLayout !== false,
     columnScopedAggregation: Boolean(columnScopedAggregation),
+    datasourceSql:
+      (chartProps.datasource as any)?.sql ||
+      (chartProps.rawFormData as any)?.sql,
+    executedQuery: (queriesData[0] as any)?.query,
     htmlViewerActions,
     validationError:
       validationErrors.length > 0 ? validationErrors.join(' | ') : undefined,

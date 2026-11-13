@@ -138,3 +138,19 @@ This document maintains feature capabilities across custom Superset table visual
    - `transformProps.ts` normalizes `isRefreshing` to a strict boolean: `const isRefreshing = Boolean((chartProps as any).isRefreshing)`.
    - Chart components wrap the `Spin` condition in `Boolean(isSaving || isRefreshing)`, ensuring `<Spin spinning={false}>` is passed when no refresh or save is occurring.
    - Action and Layout buttons similarly enforce `loading={Boolean(isSaving || isRefreshing)}` and `disabled={Boolean(isRefreshing)}`.
+
+## Jinja-Templated Query Column-Scoped Aggregation Handling
+
+1. **Overview & Special Case Scenario**:
+   - In Superset, datasets can be virtual datasets created in SQL Lab with Jinja templating (e.g. `{% if ... %}`, `{{ ... }}`, `{# ... #}`), and metrics can contain Jinja control tags or embedded parameters.
+   - When **Column-Scoped Aggregation** is enabled, subtotal calculations must accurately inspect and extract the underlying simple SQL aggregation function (`Sum`, `Average`, `Count`, `Count Unique Values`, `Minimum`, `Maximum`, `Median`, `Sample Variance`, `Sample Standard Deviation`) even when queries and metric expressions contain Jinja templating.
+2. **Resolution & Extraction Pipeline**:
+   - **Jinja Sanitization (`extractSimpleAggFromJinjaSql`)**:
+     - Strips Jinja comments (`{# ... #}`) and standard SQL comments (`--`, `/* ... */`) to prevent comment contents from falsely triggering keyword regexes.
+     - Inspects Jinja `set` variables for explicit aggregation declarations (e.g. `{% set agg = 'average' %}`).
+     - Inspects Jinja expressions outputting aggregation names (e.g. `{{ 'SUM' }}(amount)`).
+     - Detects aggregations wrapping Jinja tags (e.g. `AVG({{ ... }})`, `COUNT(DISTINCT {{ ... }})`).
+     - Normalizes control blocks (`{% ... %}`) and placeholders (`{{ ... }}`) to reveal clean underlying SQL, then extracts the simple aggregation function.
+   - **Templated Dataset Query Matching (`extractMetricAggFromTemplatedQuery`)**:
+     - When the dataset itself is defined by a Jinja-templated SQL query (`datasourceSql`, `fetchedSql`, `executedQuery`), it searches the `SELECT` list for expressions aliased to the metric name (`<AGG>(...) AS "<metricName>"`).
+     - Maps the extracted aggregation to the metric column's subtotal calculation dynamically.

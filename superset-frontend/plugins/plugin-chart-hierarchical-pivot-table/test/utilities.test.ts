@@ -66,3 +66,147 @@ describe('isColorDark', () => {
     expect(isColorDark('invalid')).toBe(false);
   });
 });
+
+import {
+  extractSimpleAggFromJinjaSql,
+  extractMetricAggFromTemplatedQuery,
+  resolveMetricAggregation,
+} from '../src/HierarchicalPivotTable';
+
+describe('extractSimpleAggFromJinjaSql', () => {
+  it('should extract simple aggregation from Jinja if/else query', () => {
+    const jinjaSql = `
+      {% if filter_values('type')[0] == 'avg' %}
+        AVG(sales_amount)
+      {% else %}
+        SUM(sales_amount)
+      {% endif %}
+    `;
+    expect(extractSimpleAggFromJinjaSql(jinjaSql)).toBe('Average');
+  });
+
+  it('should ignore Jinja comments that contain aggregation keywords', () => {
+    const jinjaSql = `
+      {# note: do not use count(distinct user) here #}
+      SUM(net_demand_retail)
+    `;
+    expect(extractSimpleAggFromJinjaSql(jinjaSql)).toBe('Sum');
+  });
+
+  it('should extract simple aggregation wrapping Jinja tags', () => {
+    const jinjaSql = `AVG({{ filter_values('metric_col')[0] }})`;
+    expect(extractSimpleAggFromJinjaSql(jinjaSql)).toBe('Average');
+  });
+
+  it('should extract simple aggregation from CASE WHEN containing Jinja expressions', () => {
+    const jinjaSql = `
+      SUM(CASE WHEN division = '{{ filter_values("division")[0] }}' THEN amount ELSE 0 END)
+    `;
+    expect(extractSimpleAggFromJinjaSql(jinjaSql)).toBe('Sum');
+  });
+
+  it('should extract aggregation declared via Jinja set variable', () => {
+    const jinjaSql = `{% set agg = 'average' %} SELECT * FROM table`;
+    expect(extractSimpleAggFromJinjaSql(jinjaSql)).toBe('Average');
+  });
+
+  it('should extract aggregation from Jinja literal function', () => {
+    const jinjaSql = `{{ 'SUM' }}(amount)`;
+    expect(extractSimpleAggFromJinjaSql(jinjaSql)).toBe('Sum');
+  });
+
+  it('should extract Count Unique Values from COUNT DISTINCT in templated SQL', () => {
+    const jinjaSql = `
+      COUNT(DISTINCT CASE WHEN flag = 1 THEN {{ 'user_id' }} ELSE NULL END)
+    `;
+    expect(extractSimpleAggFromJinjaSql(jinjaSql)).toBe('Count Unique Values');
+  });
+
+  it('should extract Minimum, Maximum, Median, Variance, Standard Deviation', () => {
+    expect(extractSimpleAggFromJinjaSql(`MIN(price * {{ rate }})`)).toBe('Minimum');
+    expect(extractSimpleAggFromJinjaSql(`MAX(score)`)).toBe('Maximum');
+    expect(extractSimpleAggFromJinjaSql(`MEDIAN(response_time)`)).toBe('Median');
+    expect(extractSimpleAggFromJinjaSql(`STDDEV(latency)`)).toBe('Sample Standard Deviation');
+    expect(extractSimpleAggFromJinjaSql(`VARIANCE(variance_metric)`)).toBe('Sample Variance');
+  });
+});
+
+describe('extractMetricAggFromTemplatedQuery', () => {
+  const templatedQuery = `
+    SELECT
+      year,
+      brand,
+      division,
+      SUM(net_demand) AS "Net Demand Retail $",
+      AVG(aur) AS "AUR %",
+      COUNT(DISTINCT order_id) AS distinct_orders,
+      MIN(cost) AS min_cost,
+      MAX(cost) AS max_cost
+    FROM sales_data
+    WHERE 1=1
+    {% if filter_values('division') %}
+      AND division IN ({{ filter_values('division')|where_in }})
+    {% endif %}
+    GROUP BY year, brand, division
+  `;
+
+  it('should extract matching simple aggregations for metrics from templated query', () => {
+    expect(extractMetricAggFromTemplatedQuery('Net Demand Retail $', templatedQuery)).toBe('Sum');
+    expect(extractMetricAggFromTemplatedQuery('AUR %', templatedQuery)).toBe('Average');
+    expect(extractMetricAggFromTemplatedQuery('distinct_orders', templatedQuery)).toBe('Count Unique Values');
+    expect(extractMetricAggFromTemplatedQuery('min_cost', templatedQuery)).toBe('Minimum');
+    expect(extractMetricAggFromTemplatedQuery('max_cost', templatedQuery)).toBe('Maximum');
+  });
+
+  it('should return null when metric is not found in templated query', () => {
+    expect(extractMetricAggFromTemplatedQuery('unknown_metric', templatedQuery)).toBeNull();
+  });
+});
+
+describe('resolveMetricAggregation with Jinja-templated queries', () => {
+  it('should resolve aggregation from templated dataset query when metric has no explicit aggregate', () => {
+    const templatedQuery = `
+      SELECT
+        category,
+        AVG(price) AS unit_price
+      FROM catalog
+      {% if filter_values('category') %}
+        WHERE category = '{{ filter_values("category")[0] }}'
+      {% endif %}
+    `;
+    const result = resolveMetricAggregation(
+      'unit_price',
+      [],
+      [],
+      [],
+      {},
+      'Sum',
+      templatedQuery,
+    );
+    expect(result).toBe('Average');
+  });
+
+  it('should resolve aggregation when metric sqlExpression contains Jinja templating', () => {
+    const adhocMetrics = [
+      {
+        label: 'Dynamic Metric',
+        sqlExpression: `
+          {% if filter_values('mode')[0] == 'avg' %}
+            AVG(rate)
+          {% else %}
+            SUM(rate)
+          {% endif %}
+        `,
+      },
+    ];
+    const result = resolveMetricAggregation(
+      'Dynamic Metric',
+      adhocMetrics as any,
+      [],
+      [],
+      {},
+      'Sum',
+    );
+    expect(result).toBe('Average');
+  });
+});

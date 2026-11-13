@@ -177,6 +177,155 @@ export const formatPercentageValue = (val: any): string => {
   return `${scaled.toFixed(2)}%`;
 };
 
+export const mapAggregateToName = (agg: string | undefined): string | null => {
+  if (!agg) return null;
+  const upper = String(agg).toUpperCase().trim();
+  switch (upper) {
+    case 'AVG':
+    case 'AVERAGE':
+    case 'MEAN':
+      return 'Average';
+    case 'SUM':
+      return 'Sum';
+    case 'COUNT':
+      return 'Count';
+    case 'COUNT_DISTINCT':
+      return 'Count Unique Values';
+    case 'MIN':
+    case 'MINIMUM':
+      return 'Minimum';
+    case 'MAX':
+    case 'MAXIMUM':
+      return 'Maximum';
+    case 'MEDIAN':
+      return 'Median';
+    case 'VAR':
+    case 'VARIANCE':
+      return 'Sample Variance';
+    case 'STD':
+    case 'STDEV':
+    case 'STDDEV':
+      return 'Sample Standard Deviation';
+    case 'FIRST':
+      return 'First';
+    case 'LAST':
+      return 'Last';
+    default:
+      return null;
+  }
+};
+
+export const extractFromSql = (sql: string | undefined): string | null => {
+  if (!sql) return null;
+  const cleanSql = String(sql).trim();
+  if (/\bcount\s*\(\s*distinct\b/i.test(cleanSql)) return 'Count Unique Values';
+  if (/\b(avg|average|mean)\s*\(/i.test(cleanSql)) return 'Average';
+  if (/\bcount\s*\(/i.test(cleanSql)) return 'Count';
+  if (/\bmin\s*\(/i.test(cleanSql)) return 'Minimum';
+  if (/\bmax\s*\(/i.test(cleanSql)) return 'Maximum';
+  if (/\bmedian\s*\(/i.test(cleanSql)) return 'Median';
+  if (/\b(std|stdev|stddev)\s*\(/i.test(cleanSql)) return 'Sample Standard Deviation';
+  if (/\b(var|variance)\s*\(/i.test(cleanSql)) return 'Sample Variance';
+  if (/\bsum\s*\(/i.test(cleanSql)) return 'Sum';
+  return null;
+};
+
+export const extractSimpleAggFromJinjaSql = (sql: string | undefined): string | null => {
+  if (!sql) return null;
+  const rawSql = String(sql).trim();
+
+  // 1. Remove Jinja comments: {# ... #} as well as SQL comments
+  const noComments = rawSql
+    .replace(/\{#[\s\S]*?#\}/g, ' ')
+    .replace(/--.*$/gm, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ');
+
+  // 2. Check if a simple aggregation is explicitly declared in Jinja set/variable
+  // e.g. {% set agg = 'sum' %} or {% set aggregation = 'avg' %}
+  const jinjaAggVarMatch = noComments.match(
+    /\{%\s*set\s+(?:agg|aggregation|metric_agg|agg_func|aggregate)\s*=\s*['"]([a-zA-Z_]+)['"]\s*%\}/i,
+  );
+  if (jinjaAggVarMatch) {
+    const fromVar = mapAggregateToName(jinjaAggVarMatch[1]);
+    if (fromVar) return fromVar;
+  }
+
+  // Check if Jinja expression outputs aggregation function name: {{ 'SUM' }}(col) or {{ 'AVG' }}(col)
+  const jinjaLiteralFuncMatch = noComments.match(
+    /\{\{\s*['"](sum|avg|average|mean|count|min|max|median|std|stdev|var|variance)['"]\s*\}\}\s*\(/i,
+  );
+  if (jinjaLiteralFuncMatch) {
+    const fromLiteral = mapAggregateToName(jinjaLiteralFuncMatch[1]);
+    if (fromLiteral) return fromLiteral;
+  }
+
+  // 3. Check for simple aggregations directly wrapping a Jinja block: e.g. SUM({{ ... }}) or AVG({{ ... }})
+  const wrappingDistinctMatch = noComments.match(/\bcount\s*\(\s*distinct\s*\{\{/i);
+  if (wrappingDistinctMatch) return 'Count Unique Values';
+
+  const wrappingMatch = noComments.match(
+    /\b(avg|average|mean|sum|count|min|max|median|std|stdev|stddev|var|variance)\s*\(\s*(?:distinct\s+)?\{\{/i,
+  );
+  if (wrappingMatch) {
+    const fromWrap = mapAggregateToName(wrappingMatch[1]);
+    if (fromWrap) return fromWrap;
+  }
+
+  // 4. Strip Jinja control tags {% ... %} and expression tags {{ ... }}
+  // replacing them with clean spaces/placeholders so the underlying SQL structure is visible
+  const strippedSql = noComments
+    .replace(/\{%[\s\S]*?%\}/g, ' ')
+    .replace(/\{\{[\s\S]*?\}\}/g, ' __col__ ')
+    .trim();
+
+  // 5. Run simple aggregation extraction on the stripped SQL
+  return extractFromSql(strippedSql);
+};
+
+export const extractMetricAggFromTemplatedQuery = (
+  metricName: string,
+  templatedSql: string | undefined,
+): string | null => {
+  if (!metricName || !templatedSql) return null;
+
+  // Clean comments
+  const cleanSql = String(templatedSql)
+    .replace(/\{#[\s\S]*?#\}/g, ' ')
+    .replace(/--.*$/gm, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ');
+
+  // Escape special regex characters in metricName
+  const escapedName = metricName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  // Match expressions aliased to this metric:
+  // e.g. SUM(demand) AS "Net Demand Retail $" or AVG(aur) AS net_demand
+  const aliasPattern = new RegExp(
+    `\\b([a-zA-Z_]+(?:\\s*\\([\\s\\S]*?\\))?)\\s+(?:AS\\s+)?["'\`]?${escapedName}["'\`]?\\b`,
+    'i',
+  );
+
+  const match = cleanSql.match(aliasPattern);
+  if (match) {
+    const expr = match[1];
+    const fromExpr = extractSimpleAggFromJinjaSql(expr);
+    if (fromExpr) return fromExpr;
+  }
+
+  // Match simple aggregation pattern followed by alias:
+  // e.g. SUM( ... ) AS ...
+  const simpleAliasPattern = new RegExp(
+    `\\b(avg|average|mean|sum|count|min|max|median|std|stdev|stddev|var|variance)\\s*\\([\\s\\S]*?\\)\\s+(?:AS\\s+)?["'\`]?${escapedName}["'\`]?`,
+    'i',
+  );
+  const matchSimple = cleanSql.match(simpleAliasPattern);
+  if (matchSimple) {
+    const fromSimple = extractSimpleAggFromJinjaSql(matchSimple[0]);
+    if (fromSimple) return fromSimple;
+  }
+
+  return null;
+};
+
 export const resolveMetricAggregation = (
   metricName: string,
   metrics: (string | AdhocMetric)[] = [],
@@ -184,61 +333,10 @@ export const resolveMetricAggregation = (
   datasourceMetrics: DatasourceMetric[] = [],
   columnConfig: Record<string, any> = {},
   defaultAgg = 'Sum',
+  templatedQuery?: string,
+  datasourceColumns: any[] = [],
 ): string => {
   if (!metricName) return defaultAgg;
-
-  const mapAggregateToName = (agg: string | undefined): string | null => {
-    if (!agg) return null;
-    const upper = String(agg).toUpperCase().trim();
-    switch (upper) {
-      case 'AVG':
-      case 'AVERAGE':
-      case 'MEAN':
-        return 'Average';
-      case 'SUM':
-        return 'Sum';
-      case 'COUNT':
-        return 'Count';
-      case 'COUNT_DISTINCT':
-        return 'Count Unique Values';
-      case 'MIN':
-      case 'MINIMUM':
-        return 'Minimum';
-      case 'MAX':
-      case 'MAXIMUM':
-        return 'Maximum';
-      case 'MEDIAN':
-        return 'Median';
-      case 'VAR':
-      case 'VARIANCE':
-        return 'Sample Variance';
-      case 'STD':
-      case 'STDEV':
-      case 'STDDEV':
-        return 'Sample Standard Deviation';
-      case 'FIRST':
-        return 'First';
-      case 'LAST':
-        return 'Last';
-      default:
-        return null;
-    }
-  };
-
-  const extractFromSql = (sql: string | undefined): string | null => {
-    if (!sql) return null;
-    const cleanSql = String(sql).trim();
-    if (/\bcount\s*\(\s*distinct\b/i.test(cleanSql)) return 'Count Unique Values';
-    if (/\b(avg|average|mean)\s*\(/i.test(cleanSql)) return 'Average';
-    if (/\bcount\s*\(/i.test(cleanSql)) return 'Count';
-    if (/\bmin\s*\(/i.test(cleanSql)) return 'Minimum';
-    if (/\bmax\s*\(/i.test(cleanSql)) return 'Maximum';
-    if (/\bmedian\s*\(/i.test(cleanSql)) return 'Median';
-    if (/\b(std|stdev|stddev)\s*\(/i.test(cleanSql)) return 'Sample Standard Deviation';
-    if (/\b(var|variance)\s*\(/i.test(cleanSql)) return 'Sample Variance';
-    if (/\bsum\s*\(/i.test(cleanSql)) return 'Sum';
-    return null;
-  };
 
   // 1. Check columnConfig
   const colConf = columnConfig?.[metricName];
@@ -247,7 +345,7 @@ export const resolveMetricAggregation = (
     if (fromColConf) return fromColConf;
   }
 
-  // 2. Check metrics from formData / props
+  // 2. Check metrics from formData / props (Adhoc Metrics & Custom SQL)
   const allMetricObjs = [...rawMetrics, ...metrics];
   for (const m of allMetricObjs) {
     if (!m) continue;
@@ -265,8 +363,9 @@ export const resolveMetricAggregation = (
           const matched = mapAggregateToName(m.aggregate);
           if (matched) return matched;
         }
-        if (m.sqlExpression || m.expression) {
-          const matched = extractFromSql(m.sqlExpression || m.expression);
+        const sqlExpr = m.sqlExpression || m.expression;
+        if (sqlExpr) {
+          const matched = extractSimpleAggFromJinjaSql(sqlExpr);
           if (matched) return matched;
         }
       }
@@ -290,13 +389,36 @@ export const resolveMetricAggregation = (
         if (matched) return matched;
       }
       if (dm.expression) {
-        const matched = extractFromSql(dm.expression);
+        const matched = extractSimpleAggFromJinjaSql(dm.expression);
         if (matched) return matched;
       }
     }
   }
 
-  // 4. Name heuristics for metric name / label
+  // 4. Check datasource columns if calculated/virtual with Jinja / SQL expression
+  for (const col of datasourceColumns) {
+    if (!col) continue;
+    const colName = col.column_name || col.name;
+    const vName = col.verbose_name;
+    const matches =
+      colName === metricName ||
+      vName === metricName ||
+      String(colName).toLowerCase().trim() === String(metricName).toLowerCase().trim() ||
+      String(vName).toLowerCase().trim() === String(metricName).toLowerCase().trim();
+
+    if (matches && col.expression) {
+      const matched = extractSimpleAggFromJinjaSql(col.expression);
+      if (matched) return matched;
+    }
+  }
+
+  // 5. Check in Jinja-templated dataset query or executed query if available
+  if (templatedQuery) {
+    const matched = extractMetricAggFromTemplatedQuery(metricName, templatedQuery);
+    if (matched) return matched;
+  }
+
+  // 6. Name heuristics for metric name / label
   const lower = metricName.toLowerCase().trim();
   if (/(^|_|\b)(avg|average|mean)($|_|\b)/i.test(lower)) return 'Average';
   if (/(^|_|\b)(min|minimum)($|_|\b)/i.test(lower)) return 'Minimum';
@@ -364,6 +486,8 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
     htmlViewerActions = [],
     validationError,
     columnScopedAggregation = false,
+    datasourceSql,
+    executedQuery,
   } = props;
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -374,6 +498,7 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
   // State for columns fetched explicitly from API
   const [fetchedColumns, setFetchedColumns] = useState<DatasourceColumn[]>([]);
   const [fetchedMetrics, setFetchedMetrics] = useState<DatasourceMetric[]>([]);
+  const [fetchedSql, setFetchedSql] = useState<string | undefined>();
 
   useEffect(() => {
     if (validationError) {
@@ -867,6 +992,9 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
         endpoint: `/api/v1/dataset/${datasourceId}`,
       })
         .then(({ json }) => {
+          if (json.result?.sql) {
+            setFetchedSql(json.result.sql);
+          }
           const columns =
             json.result?.columns?.map((col: any) => ({
               column_name: col.column_name,
@@ -979,7 +1107,18 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
       ...fetchedMetrics,
       ...(((props as any).datasource as any)?.metrics || []),
     ];
+    const dsColumns = [
+      ...fetchedColumns,
+      ...(allColumns || []),
+      ...(((props as any).datasource as any)?.columns || []),
+    ];
     const colConfig = (rawFormData as any)?.column_config || {};
+    const effectiveTemplatedQuery =
+      fetchedSql ||
+      datasourceSql ||
+      executedQuery ||
+      (rawFormData as any)?.sql ||
+      (rawFormData as any)?.query;
 
     effectiveMetricNames.forEach(name => {
       map[name] = resolveMetricAggregation(
@@ -989,6 +1128,8 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
         dsMetrics,
         colConfig,
         aggregateFunction || 'Sum',
+        effectiveTemplatedQuery,
+        dsColumns,
       );
     });
     return map;
@@ -998,6 +1139,11 @@ export default function HierarchicalPivotTable(props: PivotTableProps) {
     metrics,
     rawFormData,
     fetchedMetrics,
+    fetchedColumns,
+    allColumns,
+    fetchedSql,
+    datasourceSql,
+    executedQuery,
     props,
     aggregateFunction,
   ]);

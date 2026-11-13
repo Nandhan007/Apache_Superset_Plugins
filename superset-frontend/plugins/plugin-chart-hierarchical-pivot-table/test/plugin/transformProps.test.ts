@@ -214,6 +214,8 @@ describe('PivotTableChart transformProps', () => {
       onContextMenu: undefined,
       enableLayout: true,
       columnScopedAggregation: false,
+      datasourceSql: undefined,
+      executedQuery: undefined,
       htmlViewerActions: undefined,
     });
   });

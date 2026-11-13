@@ -133,6 +133,8 @@ interface PivotTableCustomizeProps {
   columnScopedAggregation?: boolean;
   htmlViewerActions?: HTMLViewerActionConfig[];
   validationError?: string;
+  datasourceSql?: string;
+  executedQuery?: string;
 }
 
 export interface RedirectConfig {
